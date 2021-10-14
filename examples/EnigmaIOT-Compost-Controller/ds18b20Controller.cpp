@@ -17,7 +17,7 @@ constexpr auto CONFIG_FILE = "/customconf.json"; ///< @brief Custom configuratio
 // like serial port instances, I2C, etc
 // -----------------------------------------
 
-#define ONE_WIRE_BUS 2
+#define ONE_WIRE_BUS 4
 
 
 bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint8_t* buffer, uint8_t length, nodeMessageType_t command, nodePayloadEncoding_t payloadEncoding) {

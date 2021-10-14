@@ -3,7 +3,7 @@
 // 
 
 #include <functional>
-#include "ds18b20Controller.h"
+#include "CompostController.h"
 
 using namespace std;
 using namespace placeholders;
@@ -18,6 +18,11 @@ constexpr auto CONFIG_FILE = "/customconf.json"; ///< @brief Custom configuratio
 // -----------------------------------------
 
 #define ONE_WIRE_BUS 2
+
+OneWire* oneWire;
+
+uint8_t readStatus = 0;
+AHT10 myAHT10(AHT10_ADDRESS_0X38);
 
 
 bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint8_t* buffer, uint8_t length, nodeMessageType_t command, nodePayloadEncoding_t payloadEncoding) {
@@ -35,7 +40,17 @@ bool CONTROLLER_CLASS_NAME::sendCommandResp (const char* command, bool result) {
 bool CONTROLLER_CLASS_NAME::sendTemperature (float temp) {
 	const size_t capacity = JSON_OBJECT_SIZE (2);
 	DynamicJsonDocument json (capacity);
-	json["temp"] = temp;
+	json["18b20"] = temp;
+
+	return sendJson (json);
+}
+
+bool CONTROLLER_CLASS_NAME::sendTempHum (float tempe, float hum) {
+	const size_t capacity = JSON_OBJECT_SIZE (3);
+	DynamicJsonDocument json (capacity);
+	json["temp"] = tempe;
+	json["hum"] = hum;
+	
 
 	return sendJson (json);
 }
@@ -62,6 +77,7 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 	sensors->setWaitForConversion (false);
 	sensors->requestTemperatures ();
 #endif
+	myAHT10.begin(); // default SDA & SCL pin (D2,D1)
     time_t start = millis ();
 
     // Send a 'hello' message when initalizing is finished
@@ -80,6 +96,8 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 #else
     tempC = 25.8;
 #endif
+	humidity    = myAHT10.readHumidity();
+	temperature = myAHT10.readTemperature();
     
     // Send a 'hello' message when initalizing is finished
     //sendStartAnouncement ();
@@ -95,9 +113,11 @@ void CONTROLLER_CLASS_NAME::loop () {
 
 	// You can send your data as JSON. This is a basic example
 
-    if (!tempSent && enigmaIotNode->isRegistered()) {
+    if (!tempSent &&! tempSent2 && enigmaIotNode->isRegistered()) {
         if (sendTemperature (tempC)) {
             tempSent = true;
+        }if (sendTempHum (temperature, humidity)) {
+            tempSent2 = true;
         }
         // else {
         //}
@@ -142,6 +162,7 @@ bool CONTROLLER_CLASS_NAME::saveConfig () {
 void CONTROLLER_CLASS_NAME::buildHADiscovery () {
     // Select corresponding HAEntiny type
     HASensor* haEntity = new HASensor ();
+	HASensor* haEntity2 = new HASensor ();
 
     uint8_t* msgPackBuffer;
 
@@ -177,6 +198,51 @@ void CONTROLLER_CLASS_NAME::buildHADiscovery () {
 
     if (haEntity) {
         delete (haEntity);
+    }
+
+    if (msgPackBuffer) {
+        free (msgPackBuffer);
+		
+		//-------------- 2 Sensor----------------------------
+    }
+	if (!haEntity2) {
+        DEBUG_WARN ("JSON object instance does not exist");
+        return;
+    }
+
+    // *******************************
+    // Add your characteristics here
+    // There is no need to futher modify this function
+
+    haEntity2->setNameSufix ("temperature");
+    haEntity2->setDeviceClass (sensor_temperature);
+    haEntity2->setExpireTime (3600);
+    haEntity2->setUnitOfMeasurement ("ºC");
+    haEntity2->setValueField ("temp");
+	haEntity2->setNameSufix ("humidity");
+    haEntity2->setDeviceClass (sensor_humidity);
+    haEntity2->setExpireTime (3600);
+    haEntity2->setUnitOfMeasurement ("º%");
+    haEntity2->setValueField ("hum");
+	
+    //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
+
+    // *******************************
+
+    bufferLen = haEntity2->measureMessage ();
+
+    msgPackBuffer = (uint8_t*)malloc (bufferLen);
+
+    len = haEntity2->getAnounceMessage (bufferLen, msgPackBuffer);
+
+    DEBUG_INFO ("Resulting MSG pack length: %d", len);
+
+    if (!sendHADiscovery (msgPackBuffer, len)) {
+        DEBUG_WARN ("Error sending HA discovery message");
+    }
+
+    if (haEntity2) {
+        delete (haEntity2);
     }
 
     if (msgPackBuffer) {
