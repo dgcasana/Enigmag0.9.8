@@ -56,7 +56,7 @@ bool releRx,datoRx=false;
 // Pines del Wemos
 #define RELE_PIN D1 // como siempre
 #define ONE_WIRE_BUS D6
-#define TERMOSTATO_PIN D7
+//#define TERMOSTATO_PIN D7
 #define TRIGGER_PIN  D3  // Arduino pin tied to trigger pin on the ultrasonic sensor.
 #define ECHO_PIN     D2  // Arduino pin tied to echo pin on the ultrasonic sensor.
 #define MAX_DISTANCE 200 // Maximum distance we want to ping for (in centimeters). Maximum sensor distance is rated at 400-500cm.
@@ -64,12 +64,13 @@ bool releRx,datoRx=false;
 NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
 
 
-float tempCaldera, tempPBaja, tempPAlta;
+
 int termost;
 unsigned long timeout;
 DeviceAddress  termCaldera= { 0x28, 0xFE, 0x7C, 0x75, 0xD0, 0x01, 0x3C, 0xDA };
 DeviceAddress termPBaja   = { 0x28, 0xFF, 0x34, 0xB6, 0x51, 0x17, 0x04, 0x78 };
 DeviceAddress termPAlta   = { 0x28, 0xFF, 0x95, 0x6C, 0x53, 0x17, 0x04, 0xD3 };
+DeviceAddress termAcumula   = { 0x28, 0xFF, 0x95, 0x6C, 0x53, 0x17, 0x04, 0xD3 };  // cambiar direccion
 
 OneWire oneWire(ONE_WIRE_BUS);
 
@@ -78,9 +79,8 @@ DallasTemperature sensors(&oneWire);
 ADC_MODE (ADC_VCC);
 
 bool bypass = true, unaVez = true;
-
 const size_t capacity = JSON_OBJECT_SIZE (5);
-
+float tempCaldera, tempPBaja, tempPAlta, tempAcumula, nivelPellets;
 
 void connectEventHandler () {
 	Serial.println ("Connected");
@@ -96,6 +96,7 @@ void processRxData (const uint8_t* mac, const uint8_t* buffer, uint8_t length, n
 	uint8_t tempBuffer[MAX_MESSAGE_LENGTH];
 	bool broadcast = false;
 	uint8_t _command = command;
+	DynamicJsonDocument json (capacity);
 
 	if (_command & 0x80)
 		broadcast = true;
@@ -160,9 +161,9 @@ void sendMsgPack (DynamicJsonDocument json) {
 }
 
 void setup () {
-	pinMode(TERMOSTATO_PIN,INPUT_PULLUP);
+	
 	pinMode(RELE_PIN,OUTPUT);
-  	Serial.begin (115200); Serial.println (); Serial.println ("enigmaiot_Caldera-v2.0.2 --  Enigmav0.9.6");
+  	Serial.begin (115200); Serial.println (); Serial.println ("enigmaiot_Caldera-v2.1 --  Enigmav0.9.8");
 	Serial.println ("----Reset Pin D5----");
 
 #ifdef ESP32
@@ -245,11 +246,11 @@ void userCode(){
 			
 		sensors.requestTemperatures();
 		// print the device information
-		float tempCaldera = sensors.getTempC(termCaldera);
-		float tempPBaja = sensors.getTempC(termPBaja);
-		float tempPAlta = sensors.getTempC(termPAlta);
+		tempCaldera = sensors.getTempC(termCaldera);
+		tempPBaja = sensors.getTempC(termPBaja);
+		tempPAlta = sensors.getTempC(termPAlta);
+		tempAcumula = sensors.getTempC(termAcumula);
 		int lecturas=0,suma=0;
-		float nivelPellets;
 		int distancia;
 
 		Serial.printf ("tempCaldera: %f\n", tempCaldera);
@@ -318,27 +319,20 @@ void userCode(){
 		// End of user code
 }
 
-void loop () {
-
-	EnigmaIOTNode.handle ();
-
-	termost = !digitalRead(TERMOSTATO_PIN);
-
-	CayenneLPP msg (20);
+void arranque(){
+	static int lastState = 1, tParo = 57, tArran = 50;
+	static bool permisoTemp = true;
 
 	DynamicJsonDocument json (capacity);
-
-	static time_t lastSensorData;
-	static const time_t SENSOR_PERIOD = 300000;
 	static time_t lastStart;
 	static const time_t START_PERIOD = 7200000;  // 2 horas
-	if (millis () - lastSensorData > SENSOR_PERIOD) {
-		lastSensorData = millis ();
-		showTime ();
-		userCode();
-	}
-	static int lastState = 1;
-	static bool permisoTemp = true;
+
+	if (tempPBaja - tempCaldera < 6) tParo = 60; // Si el suelo esta frio aumento la histeresis
+	else tParo = 57;
+	
+	if ((tempCaldera < tArran) && (nivelPellets > 35))	termost = HIGH;
+	else if( tempCaldera > tParo) termost = LOW;
+
 	if(termost == HIGH && unaVez){
 		unaVez = false;
 		
@@ -371,4 +365,25 @@ void loop () {
 		Serial.println("Arranque permitido por tiempo");
 	}
 
+
+}
+
+void loop () {
+
+	EnigmaIOTNode.handle ();
+
+	CayenneLPP msg (20);
+
+	//DynamicJsonDocument json (capacity);
+
+	static time_t lastSensorData;
+	static const time_t SENSOR_PERIOD = 300000;
+	
+	if (millis () - lastSensorData > SENSOR_PERIOD) {
+		lastSensorData = millis ();
+		showTime ();
+		userCode();
+		arranque();
+	}
+	
 }
