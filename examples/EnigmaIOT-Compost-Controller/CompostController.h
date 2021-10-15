@@ -38,7 +38,7 @@ protected:
 	DallasTemperature* sensors;
     DeviceAddress insideThermometer;
     bool tempSent = false;
-	bool tempSent2 = false;
+	//bool tempSent2 = false;
     float tempC;
 	float   temperature = 0;
 	float   humidity    = 0;
@@ -101,15 +101,17 @@ protected:
      * @brief Sends a HA discovery message for a single entity. Add as many functions like this
      * as number of entities you need to create
      */
-    void buildHADiscovery ();
+    void buildHADs18b20Discovery ();
+	void buildHAAht10TempDiscovery ();
+	void buildHAAht10HumDiscovery ();
 #endif
     
     // ------------------------------------------------------------
 	// You may add additional method definitions that you need here
 	// ------------------------------------------------------------
 
-    bool sendTemperature (float temp);
-	bool sendTempHum (float temp, float hum);
+    //bool sendTemperature (float temp);
+	bool sendTempHum (float tempC, float temp, float hum);
 
 };
 

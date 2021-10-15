@@ -17,8 +17,8 @@ constexpr auto CONFIG_FILE = "/customconf.json"; ///< @brief Custom configuratio
 // like serial port instances, I2C, etc
 // -----------------------------------------
 
-#define ONE_WIRE_BUS 2
-
+#define ONE_WIRE_BUS 14 //(D5)  evita el gpio0 (D2)
+ 
 OneWire* oneWire;
 
 uint8_t readStatus = 0;
@@ -37,18 +37,19 @@ bool CONTROLLER_CLASS_NAME::sendCommandResp (const char* command, bool result) {
 	return true;
 }
 
-bool CONTROLLER_CLASS_NAME::sendTemperature (float temp) {
+/*bool CONTROLLER_CLASS_NAME::sendTemperature (float temp) {
 	const size_t capacity = JSON_OBJECT_SIZE (2);
 	DynamicJsonDocument json (capacity);
 	json["18b20"] = temp;
 
 	return sendJson (json);
-}
+}*/
 
-bool CONTROLLER_CLASS_NAME::sendTempHum (float tempe, float hum) {
+bool CONTROLLER_CLASS_NAME::sendTempHum (float temp, float tempe, float hum) {
 	const size_t capacity = JSON_OBJECT_SIZE (3);
 	DynamicJsonDocument json (capacity);
-	json["temp"] = tempe;
+	json["TInt"] = temp;
+    json["TExt"] = tempe;
 	json["hum"] = hum;
 	
 
@@ -59,7 +60,10 @@ void CONTROLLER_CLASS_NAME::connectInform () {
 
 #if SUPPORT_HA_DISCOVERY    
     // Register every HAEntity discovery function here. As many as you need
-    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHADiscovery, this));
+    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHADs18b20Discovery, this));
+    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAAht10TempDiscovery, this));
+    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAAht10HumDiscovery, this));
+    
 #endif
 
     EnigmaIOTjsonController::connectInform ();
@@ -113,11 +117,12 @@ void CONTROLLER_CLASS_NAME::loop () {
 
 	// You can send your data as JSON. This is a basic example
 
-    if (!tempSent &&! tempSent2 && enigmaIotNode->isRegistered()) {
-        if (sendTemperature (tempC)) {
+    if (!tempSent && enigmaIotNode->isRegistered()) {
+        /*if (sendTemperature (tempC)) {
             tempSent = true;
-        }if (sendTempHum (temperature, humidity)) {
-            tempSent2 = true;
+        }*/
+        if (sendTempHum (tempC, temperature, humidity)) {
+            tempSent = true;
         }
         // else {
         //}
@@ -159,11 +164,11 @@ bool CONTROLLER_CLASS_NAME::saveConfig () {
 
 #if SUPPORT_HA_DISCOVERY   
 // Repeat this method for every entity
-void CONTROLLER_CLASS_NAME::buildHADiscovery () {
+
+void CONTROLLER_CLASS_NAME::buildHADs18b20Discovery () {
     // Select corresponding HAEntiny type
     HASensor* haEntity = new HASensor ();
-	HASensor* haEntity2 = new HASensor ();
-
+	
     uint8_t* msgPackBuffer;
 
     if (!haEntity) {
@@ -175,11 +180,11 @@ void CONTROLLER_CLASS_NAME::buildHADiscovery () {
     // Add your characteristics here
     // There is no need to futher modify this function
 
-    haEntity->setNameSufix ("temp");
+    haEntity->setNameSufix ("Ds18b20");
     haEntity->setDeviceClass (sensor_temperature);
     haEntity->setExpireTime (3600);
     haEntity->setUnitOfMeasurement ("ºC");
-    haEntity->setValueField ("temp");
+    haEntity->setValueField ("TInt");  // nombre del json del valor a capurar
     //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
 
     // *******************************
@@ -202,10 +207,16 @@ void CONTROLLER_CLASS_NAME::buildHADiscovery () {
 
     if (msgPackBuffer) {
         free (msgPackBuffer);
-		
-		//-------------- 2 Sensor----------------------------
     }
-	if (!haEntity2) {
+		
+}
+void CONTROLLER_CLASS_NAME::buildHAAht10TempDiscovery () {
+    // Select corresponding HAEntiny type
+    HASensor* haEntity = new HASensor ();
+	
+    uint8_t* msgPackBuffer;
+
+    if (!haEntity) {
         DEBUG_WARN ("JSON object instance does not exist");
         return;
     }
@@ -214,26 +225,20 @@ void CONTROLLER_CLASS_NAME::buildHADiscovery () {
     // Add your characteristics here
     // There is no need to futher modify this function
 
-    haEntity2->setNameSufix ("temperature");
-    haEntity2->setDeviceClass (sensor_temperature);
-    haEntity2->setExpireTime (3600);
-    haEntity2->setUnitOfMeasurement ("ºC");
-    haEntity2->setValueField ("temp");
-	haEntity2->setNameSufix ("humidity");
-    haEntity2->setDeviceClass (sensor_humidity);
-    haEntity2->setExpireTime (3600);
-    haEntity2->setUnitOfMeasurement ("º%");
-    haEntity2->setValueField ("hum");
-	
+    haEntity->setNameSufix ("Aht10");
+    haEntity->setDeviceClass (sensor_temperature);
+    haEntity->setExpireTime (3600);
+    haEntity->setUnitOfMeasurement ("ºC");
+    haEntity->setValueField ("TExt");   
     //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
 
     // *******************************
 
-    bufferLen = haEntity2->measureMessage ();
+    size_t bufferLen = haEntity->measureMessage ();
 
     msgPackBuffer = (uint8_t*)malloc (bufferLen);
 
-    len = haEntity2->getAnounceMessage (bufferLen, msgPackBuffer);
+    size_t len = haEntity->getAnounceMessage (bufferLen, msgPackBuffer);
 
     DEBUG_INFO ("Resulting MSG pack length: %d", len);
 
@@ -241,12 +246,58 @@ void CONTROLLER_CLASS_NAME::buildHADiscovery () {
         DEBUG_WARN ("Error sending HA discovery message");
     }
 
-    if (haEntity2) {
-        delete (haEntity2);
+    if (haEntity) {
+        delete (haEntity);
     }
 
     if (msgPackBuffer) {
         free (msgPackBuffer);
     }
+		
+}
+void CONTROLLER_CLASS_NAME::buildHAAht10HumDiscovery () {
+    // Select corresponding HAEntiny type
+    HASensor* haEntity = new HASensor ();
+	
+    uint8_t* msgPackBuffer;
+
+    if (!haEntity) {
+        DEBUG_WARN ("JSON object instance does not exist");
+        return;
+    }
+
+    // *******************************
+    // Add your characteristics here
+    // There is no need to futher modify this function
+
+    haEntity->setNameSufix ("Hum");
+    haEntity->setDeviceClass (sensor_humidity);
+    haEntity->setExpireTime (3600);
+    haEntity->setUnitOfMeasurement ("%");
+    haEntity->setValueField ("hum");
+    //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
+
+    // *******************************
+
+    size_t bufferLen = haEntity->measureMessage ();
+
+    msgPackBuffer = (uint8_t*)malloc (bufferLen);
+
+    size_t len = haEntity->getAnounceMessage (bufferLen, msgPackBuffer);
+
+    DEBUG_INFO ("Resulting MSG pack length: %d", len);
+
+    if (!sendHADiscovery (msgPackBuffer, len)) {
+        DEBUG_WARN ("Error sending HA discovery message");
+    }
+
+    if (haEntity) {
+        delete (haEntity);
+    }
+
+    if (msgPackBuffer) {
+        free (msgPackBuffer);
+    }
+		
 }
 #endif // SUPPORT_HA_DISCOVERY
