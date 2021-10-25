@@ -8,7 +8,6 @@
   * Sensor reading code is mocked on this example. You can implement any other code you need for your specific need
   * 
   *   Actualizado a la version enigmaiot 0.9.8.
-  * 	HomeAsistant Version
   *   * 
   */
 
@@ -18,7 +17,6 @@
 
 #include <Arduino.h>
 #include <EnigmaIOTNode.h>
-#include <EnigmaIOTjsonController.h>
 #include <espnow_hal.h>
 #include <CayenneLPP.h>
 
@@ -44,13 +42,6 @@
 #include <DNSServer.h>
 #include <FS.h>
 
-#if SUPPORT_HA_DISCOVERY    
-#include <haTrigger.h>
-#include <haSwitch.h>
-#endif
-
-EnigmaIOTjsonController* controller; // Generic controller is refferenced here. You do not need to modify it
-
 //-------------------------------//
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -65,7 +56,7 @@ bool releRx,datoRx=false;
 // Pines del Wemos
 #define RELE_PIN D1 // como siempre
 #define ONE_WIRE_BUS D6
-//#define TERMOSTATO_PIN D7
+#define TERMOSTATO_PIN D7
 #define TRIGGER_PIN  D3  // Arduino pin tied to trigger pin on the ultrasonic sensor.
 #define ECHO_PIN     D2  // Arduino pin tied to echo pin on the ultrasonic sensor.
 #define MAX_DISTANCE 200 // Maximum distance we want to ping for (in centimeters). Maximum sensor distance is rated at 400-500cm.
@@ -73,13 +64,12 @@ bool releRx,datoRx=false;
 NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
 
 
-
+float tempCaldera, tempPBaja, tempPAlta;
 int termost;
 unsigned long timeout;
 DeviceAddress  termCaldera= { 0x28, 0xFE, 0x7C, 0x75, 0xD0, 0x01, 0x3C, 0xDA };
 DeviceAddress termPBaja   = { 0x28, 0xFF, 0x34, 0xB6, 0x51, 0x17, 0x04, 0x78 };
 DeviceAddress termPAlta   = { 0x28, 0xFF, 0x95, 0x6C, 0x53, 0x17, 0x04, 0xD3 };
-DeviceAddress termAcumula   = { 0x28, 0xFF, 0x95, 0x6C, 0x53, 0x17, 0x04, 0xD3 };  // cambiar direccion
 
 OneWire oneWire(ONE_WIRE_BUS);
 
@@ -88,12 +78,9 @@ DallasTemperature sensors(&oneWire);
 ADC_MODE (ADC_VCC);
 
 bool bypass = true, unaVez = true;
-const size_t capacity = JSON_OBJECT_SIZE (5);
-float tempCaldera, tempPBaja, tempPAlta, tempAcumula, nivelPellets;
 
-void buildHASwitchDiscovery ();
-void buildHATriggerDiscovery ();
-void buildHALinkDiscovery ();
+const size_t capacity = JSON_OBJECT_SIZE (5);
+
 
 void connectEventHandler () {
 	Serial.println ("Connected");
@@ -103,13 +90,27 @@ void disconnectEventHandler (nodeInvalidateReason_t reason) {
 	Serial.printf ("Unregistered. Reason: %d\n", reason);
 }
 
+void sendMsgPack (DynamicJsonDocument json) {
+  int len = measureMsgPack (json) + 1;
+    uint8_t* buffer = (uint8_t*)malloc (len);
+    len = serializeMsgPack (json, (char *)buffer, len);
+    Serial.printf ("Trying to send: %s\n", printHexBuffer (buffer, len));
+    // Send buffer data
+    if (!EnigmaIOTNode.sendData (buffer, len, MSG_PACK)) {
+      Serial.println ("---- Error sending data");
+    } else {
+      Serial.println ("---- Data sent");
+    }
+    free (buffer);
+	//json.clear();
+}
+
 void processRxData (const uint8_t* mac, const uint8_t* buffer, uint8_t length, nodeMessageType_t command, nodePayloadEncoding_t payloadEncoding) {
 	char macstr[ENIGMAIOT_ADDR_LEN * 3];
 	String commandStr;
 	uint8_t tempBuffer[MAX_MESSAGE_LENGTH];
 	bool broadcast = false;
 	uint8_t _command = command;
-	DynamicJsonDocument json (capacity);
 
 	if (_command & 0x80)
 		broadcast = true;
@@ -132,6 +133,7 @@ void processRxData (const uint8_t* mac, const uint8_t* buffer, uint8_t length, n
 
 	CayenneLPP lpp (MAX_DATA_PAYLOAD_SIZE);
 	DynamicJsonDocument doc (1000);
+	DynamicJsonDocument json (capacity);
 	JsonArray root;
 	memcpy (tempBuffer, buffer, length);
 
@@ -158,25 +160,12 @@ void processRxData (const uint8_t* mac, const uint8_t* buffer, uint8_t length, n
 	}
 }
 
-void sendMsgPack (DynamicJsonDocument json) {
-  int len = measureMsgPack (json) + 1;
-    uint8_t* buffer = (uint8_t*)malloc (len);
-    len = serializeMsgPack (json, (char *)buffer, len);
-    Serial.printf ("Trying to send: %s\n", printHexBuffer (buffer, len));
-    // Send buffer data
-    if (!EnigmaIOTNode.sendData (buffer, len, MSG_PACK)) {
-      Serial.println ("---- Error sending data");
-    } else {
-      Serial.println ("---- Data sent");
-    }
-    free (buffer);
-	//json.clear();
-}
+
 
 void setup () {
-	
+	pinMode(TERMOSTATO_PIN,INPUT_PULLUP);
 	pinMode(RELE_PIN,OUTPUT);
-  	Serial.begin (115200); Serial.println (); Serial.println ("enigmaiot_Caldera-v2.1.1 --  Enigmav0.9.8");
+  	Serial.begin (115200); Serial.println (); Serial.println ("enigmaiot_Caldera-v2.0.3 --  Enigmav0.9.8");
 	Serial.println ("----Reset Pin D5----");
 
 #ifdef ESP32
@@ -192,7 +181,7 @@ void setup () {
 	EnigmaIOTNode.onConnected (connectEventHandler);
 	EnigmaIOTNode.onDisconnected (disconnectEventHandler);
 	EnigmaIOTNode.onDataRx (processRxData);
-	EnigmaIOTNode.enableClockSync (true); // Set to true if you need this node to get its clock syncronized with gateway
+	EnigmaIOTNode.enableClockSync ();
 	EnigmaIOTNode.enableBroadcast ();
 
 	EnigmaIOTNode.begin (&Espnow_hal, NULL, NULL, true, false);
@@ -247,58 +236,58 @@ void showTime () {
 void userCode(){
 	// Read sensor data
 		// Put here your code to read sensor and compose buffer
-			
+
 		//---------------------------------------------------------------------------
 		DynamicJsonDocument json (capacity);
-		
+
 		// locate devices on the bus
 		Serial.print("Locating devices...");
 		Serial.print("Found ");
 		Serial.print(sensors.getDeviceCount(), DEC);
 		Serial.println(" devices.");
-			
+
 		sensors.requestTemperatures();
 		// print the device information
-		tempCaldera = sensors.getTempC(termCaldera);
-		tempPBaja = sensors.getTempC(termPBaja);
-		tempPAlta = sensors.getTempC(termPAlta);
-		tempAcumula = sensors.getTempC(termAcumula);
-		//int lecturas=0,suma=0;
+		float tempCaldera = sensors.getTempC(termCaldera);
+		float tempPBaja = sensors.getTempC(termPBaja);
+		float tempPAlta = sensors.getTempC(termPAlta);
+		int lecturas=0,suma=0;
+		float nivelPellets;
 		int distancia;
 
 		Serial.printf ("tempCaldera: %f\n", tempCaldera);
 		Serial.printf ("tempPAlta: %f\n", tempPAlta);
 		Serial.printf ("tempPBaja: %f\n", tempPBaja);
-			
+
 		// Nivel
 		//msg.addAnalogInput (0, (float)(ESP.getVcc ()) / 1000);
 		//msg.addTemperature (1, 20.34);
 
 		//Serial.printf ("Vcc: %f\n", (float)(ESP.getVcc ()) / 1000);
-		
+
 		/*msg.addTemperature (8, tempCaldera);
 		msg.addTemperature (9, tempPBaja);
 		msg.addTemperature (10, tempPAlta);*/
-		
-		json["tempCaldera"] = String (tempCaldera);
-				
+		json["idx"] = 8;
+		json["nvalue"] = 0;
+		json["svalue"] = String (tempCaldera);
+
 		sendMsgPack(json);
 			//--
-		
-		json["tempPBaja"] = String (tempPBaja);
-				
+		json["idx"] = 9;
+		json["nvalue"] = 0;
+		json["svalue"] = String (tempPBaja);
+
 		sendMsgPack(json);
 		//--
-			
-		json["tempPAlta"] = String (tempPAlta);
-				
+
+		json["idx"] = 10;
+		json["nvalue"] = 0;
+		json["svalue"] = String (tempPAlta);
+
 		sendMsgPack(json);
 		//--
-		json["tempAcumula"] = String (tempAcumula);
-				
-		sendMsgPack(json);
-		//--
-			
+
 		for(int i=0;i<3;i++){
 			delay(50);                     // Wait 50ms between pings (about 20 pings/sec). 29ms should be the shortest delay between pings.
 			Serial.print("Ping: ");
@@ -312,47 +301,57 @@ void userCode(){
 			nivelPellets=map(distancia,3,120,100,0);
 			/*msg.addAnalogInput(11, nivelPellets);
 			msg.addDistance(35,distancia);*/
-			
-			json["nivelPellets"] = String (nivelPellets);
+			json["idx"] = 11;
+			json["nvalue"] = 0;
+			json["svalue"] = String (nivelPellets);
 			sendMsgPack(json);
 			//--
-		/*json["idx"] = 35;
+		json["idx"] = 35;
 		json["nvalue"] = 0;
 		json["svalue"] = String (distancia);
-		sendMsgPack(json);*/
+		sendMsgPack(json);
 		//--
 		Serial.printf ("Distancia: %i\n", distancia);
 		Serial.printf ("Nivel pellets: %f\n", nivelPellets);
 		}
-		
-		json["termostato"] = termost;
-		
+		json["idx"] = 77;  //termostato
+		json["nvalue"] = termost;
+		json["svalue"] = "0";
 		sendMsgPack(json);
 		// End of user code
 }
 
-void arranque(){
-	static int lastState = 1, tParo = 57, tArran = 50;
-	static bool permisoTemp = true;
+void loop () {
+
+	EnigmaIOTNode.handle ();
+
+	termost = !digitalRead(TERMOSTATO_PIN);
+
+	CayenneLPP msg (20);
 
 	DynamicJsonDocument json (capacity);
+
+	static time_t lastSensorData;
+	static const time_t SENSOR_PERIOD = 300000;
 	static time_t lastStart;
 	static const time_t START_PERIOD = 7200000;  // 2 horas
-
-	if (tempPBaja - tempCaldera < 6) tParo = 60; // Si el suelo esta frio aumento la histeresis
-	else tParo = 57;
-	
-	if ((tempCaldera < tArran) && (nivelPellets > 35))	termost = HIGH;
-	else if( tempCaldera > tParo) termost = LOW;
-
+	if (millis () - lastSensorData > SENSOR_PERIOD) {
+		lastSensorData = millis ();
+		showTime ();
+		userCode();
+	}
+	static int lastState = 1;
+	static bool permisoTemp = true;
 	if(termost == HIGH && unaVez){
 		unaVez = false;
-		
+
 		Serial.println("Demanda de caldera");
 	}
 	if ((termost == HIGH) && bypass && permisoTemp && !lastState){
 		lastState = true;
-		json["caldera"] = 1;
+		json["idx"] = 78; // caldera
+		json["nvalue"] = 1;
+		json["svalue"] = "0";
 		sendMsgPack(json);
 		digitalWrite (RELE_PIN,1);
 		Serial.println("Orden arranque caldera");
@@ -364,8 +363,9 @@ void arranque(){
 		unaVez = true;
 		digitalWrite (RELE_PIN,0);
 		lastState = false;
-		
-		json["caldera"] = 0;
+		json["idx"] = 78; // caldera
+		json["nvalue"] = 0;
+		json["svalue"] = "0";
 		sendMsgPack(json);
 		Serial.println("Desactivado 2 horas");
 	}
@@ -374,29 +374,4 @@ void arranque(){
 		Serial.println("Arranque permitido por tiempo");
 	}
 
-
-}
-
-void loop () {
-
-	EnigmaIOTNode.handle ();
-
-	#if SUPPORT_HA_DISCOVERY 
-    controller->callHAdiscoveryCalls (); // Send HA registration messages
-	#endif // SUPPORT_HA_DISCOVERY 
-
-	CayenneLPP msg (20);
-
-	//DynamicJsonDocument json (capacity);
-
-	static time_t lastSensorData;
-	static const time_t SENSOR_PERIOD = 300000;
-	
-	if (millis () - lastSensorData > SENSOR_PERIOD) {
-		lastSensorData = millis ();
-		showTime ();
-		userCode();
-		arranque();
-	}
-	
 }
