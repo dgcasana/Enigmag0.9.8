@@ -44,6 +44,8 @@ static const char* CONTROLLER_NAME = "Caldera controller";
 
 #define MAX_DISTANCE 200 // Maximum distance we want to ping for (in centimeters). Maximum sensor distance is rated at 400-500cm.
 
+static const uint8_t CALDERA_MY_VERS[3] = { 2,1,1 }; ///< @brief Caldera Version
+
 
 
 #define ON HIGH
@@ -125,9 +127,9 @@ protected:
         DynamicJsonDocument json (capacity);
         json["status"] = "start";
         json["device"] = CONTROLLER_NAME;
-        char version_buf[10];
-        snprintf (version_buf, 10, "%d.%d.%d",
-                  ENIGMAIOT_PROT_VERS[0], ENIGMAIOT_PROT_VERS[1], ENIGMAIOT_PROT_VERS[2]);
+        char version_buf[14];
+        snprintf (version_buf, 14, "%d.%d.%d-%d.%d.%d",
+                  CALDERA_MY_VERS[0], CALDERA_MY_VERS[1], CALDERA_MY_VERS[2], ENIGMAIOT_PROT_VERS[0], ENIGMAIOT_PROT_VERS[1], ENIGMAIOT_PROT_VERS[2]);
         json["version"] = String (version_buf);
 
         return sendJson (json);

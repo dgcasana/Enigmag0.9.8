@@ -30,12 +30,12 @@ DallasTemperature sensors(&oneWire);
 
 int termosta;
 unsigned long timeout;
-DeviceAddress termCaldera   = {0x28, 0xE2, 0xE4, 0x95, 0xF0, 0x01, 0x3C, 0xA8}; //{ 0x28, 0xFE, 0x7C, 0x75, 0xD0, 0x01, 0x3C, 0xDA };
-DeviceAddress termPBaja     = {0x28, 0xBE, 0xF7, 0x95, 0xF0, 0x01, 0x3C, 0xC9};  //{ 0x28, 0xFF, 0x34, 0xB6, 0x51, 0x17, 0x04, 0x78 };
-DeviceAddress termPAlta     = {0x28, 0xCD, 0x22, 0x95, 0xF0, 0x01, 0x3C, 0x84};  //{ 0x28, 0xFF, 0x95, 0x6C, 0x53, 0x17, 0x04, 0xD3 };
-DeviceAddress termAcumula   = {0x28, 0xDB, 0x69, 0x95, 0xF0, 0x01, 0x3C, 0xF4};  //{ 0x28, 0xFF, 0x95, 0x6C, 0x53, 0x17, 0x04, 0xD3 };  // cambiar direccion
+DeviceAddress termCaldera   =  { 0x28, 0x20, 0x47, 0x75, 0xD0, 0x01, 0x3C, 0xF9 }; //{0x28, 0xE2, 0xE4, 0x95, 0xF0, 0x01, 0x3C, 0xA8}; 
+DeviceAddress termPBaja     =  { 0x28, 0xFF, 0x34, 0xB6, 0x51, 0x17, 0x04, 0x78 }; //{0x28, 0xBE, 0xF7, 0x95, 0xF0, 0x01, 0x3C, 0xC9}; 
+DeviceAddress termPAlta     =  { 0x28, 0xFF, 0x95, 0x6C, 0x53, 0x17, 0x04, 0xD3 }; // {0x28, 0xCD, 0x22, 0x95, 0xF0, 0x01, 0x3C, 0x84}; 
+DeviceAddress termAcumula   =  { 0x28, 0xFF, 0xA8, 0xDE, 0x9E, 0x20, 0xD6, 0xC6 }; //{0x28, 0xDB, 0x69, 0x95, 0xF0, 0x01, 0x3C, 0xF4}; 
 
-bool bypass = true, unaVez = true;
+bool /*bypass = true,*/ unaVez = true;
 const size_t capacity = JSON_OBJECT_SIZE (5);
 
 
@@ -97,7 +97,7 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 				return false;
 			}
 
-		} else if (!strcmp (doc[commandKey], bootStateKey)) {
+		} /*else if (!strcmp (doc[commandKey], bootStateKey)) {
 			DEBUG_WARN ("Request boot status configuration. Boot = %d",
 						config.bootStatus);
 			if (!sendBootStatus ()) {
@@ -105,7 +105,7 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 				return false;
 			}
 
-		}
+		}*/
 	}
 
 	if (command == nodeMessageType_t::DOWNSTREAM_DATA_SET) {
@@ -138,7 +138,7 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 				return false;
 			}
 
-		} else if (!strcmp (doc[commandKey], bootStateKey)) {
+		} /*else if (!strcmp (doc[commandKey], bootStateKey)) {
 			if (!doc.containsKey (bootStateKey)) {
 				DEBUG_WARN ("Wrong format");
 				return false;
@@ -152,7 +152,7 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 				return false;
 			}
 
-		}
+		}*/
 	}
 
 	return true;
@@ -180,7 +180,7 @@ bool CONTROLLER_CLASS_NAME::sendLinkStatus () {
 	return sendJson (json);
 }
 
-bool CONTROLLER_CLASS_NAME::sendBootStatus () {
+/*bool CONTROLLER_CLASS_NAME::sendBootStatus () {
 	const size_t capacity = JSON_OBJECT_SIZE (2);
 	DynamicJsonDocument json (capacity);
 
@@ -189,7 +189,7 @@ bool CONTROLLER_CLASS_NAME::sendBootStatus () {
 	json[bootStateKey] = bootStatus;
 
 	return sendJson (json);
-}
+}*/
 
 bool CONTROLLER_CLASS_NAME::sendCommandResp (const char* command, bool result) {
 	// Respond to command with a result: true if successful, false if failed 
@@ -226,6 +226,7 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 	sensors.setResolution(termCaldera, 10);
 	sensors.setResolution(termPBaja, 10);
 	sensors.setResolution(termPAlta, 10);
+	sensors.setResolution(termAcumula, 10);
 
     if (config.bootStatus != SAVE_RELAY_STATUS) {
 		config.relayStatus = (bool)config.bootStatus;
@@ -305,7 +306,7 @@ void CONTROLLER_CLASS_NAME::userCode(){
 		// Put here your code to read sensor and compose buffer
 			
 		//---------------------------------------------------------------------------
-		const size_t capacity = JSON_OBJECT_SIZE (4);
+		const size_t capacity = JSON_OBJECT_SIZE (6);
 		DynamicJsonDocument json (capacity);
 		
 		// locate devices on the bus
@@ -342,7 +343,7 @@ void CONTROLLER_CLASS_NAME::userCode(){
 		json["PAlta"] = tempPAlta;
 		json["Acumula"] = tempAcumula;
 
-		sendJson (json);
+		//sendJson (json);
 				
 		//sendMsgPack(json);
 		//--
@@ -374,7 +375,8 @@ void CONTROLLER_CLASS_NAME::userCode(){
 		Serial.printf ("Nivel pellets: %f\n", nivelPellets);
 		}
 		
-		json["termostato"] = termosta;
+		json["termostato"] = termosta ? "ON" : "OFF";
+
 		
 		sendJson(json);
 		// End of user code
@@ -400,7 +402,7 @@ void CONTROLLER_CLASS_NAME::arranque(){
 		
 		Serial.println("Demanda de caldera");
 	}
-	if ((termosta == HIGH) && bypass && permisoTemp && !lastState){
+	if ((termosta == HIGH) && config.linked && permisoTemp && !lastState){
 		lastState = true;
 		
 		//digitalWrite (RELE_PIN,1);
@@ -946,7 +948,8 @@ void CONTROLLER_CLASS_NAME::buildHACalderaDiscovery () {
     haBEntity->setNameSufix ("Caldera");
 	haBEntity->setDeviceClass (bs_heat);
     haBEntity->addExpiration (3600);
-    
+	haBEntity->setPayloadOff ("OFF");
+    haBEntity->setPayloadOn ("ON");
     haBEntity->setValueField ("rly");  // nombre del json del valor a capurar 
     //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
 
@@ -992,7 +995,7 @@ void CONTROLLER_CLASS_NAME::buildHAPelletDiscovery () {
     haEntity->setDeviceClass (sensor_humidity);
     haEntity->setExpireTime (3600);
     haEntity->setUnitOfMeasurement ("%");
-    haEntity->setValueField ("Pellet");  // nombre del json del valor a capurar 
+    haEntity->setValueField ("Pellets");  // nombre del json del valor a capurar 
     //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
 
     // *******************************
