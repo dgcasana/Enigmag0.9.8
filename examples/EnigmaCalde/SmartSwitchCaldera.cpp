@@ -16,8 +16,11 @@ constexpr auto CONFIG_FILE = "/customconf.json"; ///< @brief Custom configuratio
 // -----------------------------------------
 const char* relayKey = "rly";
 const char* commandKey = "cmd";
-
+const char* statusKey = "status";
 const char* bypassKey = "bypass";
+const char* infoKey = "info";
+const char* tParoKey = "tParo";
+const char* tArranqueKey = "tArranque";
 
 NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
 
@@ -35,7 +38,7 @@ DeviceAddress termAcumula   =  {0x28, 0xDB, 0x69, 0x95, 0xF0, 0x01, 0x3C, 0xF4};
 bool /*bypass = true,*/ unaVez = true;
 const size_t capacity = JSON_OBJECT_SIZE (5);
 
-int lastState = 1, tParo = 57, tArran = 48;
+int lastState = 1;//, tParo, tArran;
 bool permisoTemp = true;
 static time_t lastStart;
 
@@ -99,7 +102,21 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 				return false;
 			}
 
-		} 
+		} else if (!strcmp (doc[commandKey], statusKey)) {
+			DEBUG_WARN ("Request node status.");
+			if (!sendNodeStatus ()) {
+				DEBUG_WARN ("Error sending node status");
+				return false;
+			}
+
+		} else if (!strcmp (doc[commandKey], infoKey)) {
+			DEBUG_WARN ("Request info commands.");
+			if (!sendInfoCommnads ()) {
+				DEBUG_WARN ("Error sending node status");
+				return false;
+			}
+
+		}  
 	}
 
 	if (command == nodeMessageType_t::DOWNSTREAM_DATA_SET) {
@@ -141,7 +158,25 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 
 			tempAcumula = (doc["tAcumula"].as<int> ());
 
-			
+		}else if (!strcmp (doc[commandKey], tParoKey)) {
+			if (!doc.containsKey (tParoKey)) {
+				DEBUG_WARN ("Wrong format");
+				return false;
+			}
+			DEBUG_WARN ("Set temp Paro. tParo = %i", doc[tParoKey].as<int> ());
+			setParo(doc[tParoKey].as<int> ());
+		
+			//tParo = (doc[tParoKey].as<int> ());
+
+		}else if (!strcmp (doc[commandKey], tArranqueKey)) {
+			if (!doc.containsKey (tArranqueKey)) {
+				DEBUG_WARN ("Wrong format");
+				return false;
+			}
+			DEBUG_WARN ("Set temp Arranque. tArran = %i", doc[tArranqueKey].as<int> ());
+			setArran(doc[tArranqueKey].as<int> ());
+
+			//tArran = (doc[tArranqueKey].as<int> ());
 		}
 	}
 
@@ -166,6 +201,30 @@ bool CONTROLLER_CLASS_NAME::sendBypassStatus () {
 	json[commandKey] = bypassKey;
     json[bypassKey] = config.bypass ? 1 : 0;
 
+	return sendJson (json);
+}
+
+bool CONTROLLER_CLASS_NAME::sendNodeStatus () {
+	const size_t capacity = JSON_OBJECT_SIZE (5);
+	DynamicJsonDocument json (capacity);
+
+	//int lastState = 1, tParo = 57, tArran = 48;
+	//bool permisoTemp = true;
+
+	json["lastState"] = lastState;
+    json[bypassKey] = config.bypass ? 1 : 0;
+	json["tParo"] = config.tParo;
+	json["tArranque"] = config.tArranq;
+	json["PermTemp"] = permisoTemp ? "Si" : "No";
+	return sendJson (json);
+}
+
+bool CONTROLLER_CLASS_NAME::sendInfoCommnads () {
+	const size_t capacity = JSON_OBJECT_SIZE (2);
+	DynamicJsonDocument json (capacity);
+	
+	json["get"] = "rly,bypass,status";
+    json["set"] = "rly,bypass,tParo,tArranque";
 	return sendJson (json);
 }
 
@@ -209,15 +268,20 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 	DEBUG_WARN ("Relay status set to %s", config.relayStatus ? "ON" : "OFF");
 	digitalWrite (RELAY_PIN, config.relayStatus);
 
+	//tArran = config.tArranq;
+	//tParo = config.tParo;
+
 	if (config.bypassStatus != SAVE_RELAY_STATUS) {
 		config.bypass = (bool)config.bypassStatus;
 		DEBUG_WARN ("Bypass status set to Bypass Status %d -> %d", config.bypassStatus, config.bypass);
 	}
 	DEBUG_WARN ("Bypass status set to %s", config.bypass ? "ON" : "OFF");
 
-    // Send a 'hello' message when initalizing is finished
-    sendStartAnouncement ();  // Disable this if node is sleepy
-    
+    /// Send a 'hello' message when initalizing is finished
+    if (!(enigmaIotNode->getNode ()->getSleepy ())) {
+        sendStartAnouncement ();  // Disable this if node is sleepy
+    }
+
 	DEBUG_DBG ("Finish begin");
 
 	// If your node should sleep after sending data do all remaining tasks here
@@ -253,6 +317,26 @@ void CONTROLLER_CLASS_NAME::setBypass (bool state) {
 	config.bypass = state;
 	if (saveConfig ()) {
 		DEBUG_WARN ("Config updated. bypass");
+	} else {
+		DEBUG_ERROR ("Error saving config");
+	}
+}
+
+void CONTROLLER_CLASS_NAME::setParo (int temp) {
+	DEBUG_WARN ("Set tParo %d", temp);
+	config.tParo = temp;
+	if (saveConfig ()) {
+		DEBUG_WARN ("Config updated. tParo");
+	} else {
+		DEBUG_ERROR ("Error saving config");
+	}
+}
+
+void CONTROLLER_CLASS_NAME::setArran (int temp) {
+	DEBUG_WARN ("Set tArranque %d", temp);
+	config.tArranq = temp;
+	if (saveConfig ()) {
+		DEBUG_WARN ("Config updated. tArranque");
 	} else {
 		DEBUG_ERROR ("Error saving config");
 	}
@@ -340,7 +424,7 @@ void CONTROLLER_CLASS_NAME::userCode(){
 }
 
 void CONTROLLER_CLASS_NAME::arranque(){
-	
+	int tParoVar;
 	
 
 	const size_t capacity = JSON_OBJECT_SIZE (2);
@@ -348,11 +432,11 @@ void CONTROLLER_CLASS_NAME::arranque(){
 	
 	static const time_t START_PERIOD = 300000;  //7200000;  // 2 horas
 
-	if (tempPBaja - tempRetorno < 6) tParo = 60; // Si el suelo esta frio aumento la histeresis
-	else tParo = 57;
+	if (tempPBaja - tempRetorno < 6) tParoVar = 60; // Si el suelo esta frio aumento la histeresis
+	else tParoVar = config.tParo;
 	
-	if ((tempAcumula < tArran) && (nivelPellets > 35))	termosta = HIGH;
-	else if( tempAcumula > tParo) termosta = LOW;
+	if ((tempAcumula < config.tArranq) && (nivelPellets > 35))	termosta = HIGH;
+	else if( tempAcumula > tParoVar) termosta = LOW;
 
 	if(termosta == HIGH && unaVez){
 		unaVez = false;
@@ -427,15 +511,34 @@ void CONTROLLER_CLASS_NAME::configManagerStart () {
 void CONTROLLER_CLASS_NAME::configManagerExit (bool status) {
 	DEBUG_INFO ("==== CCost Controller Configuration result ====");
 	// You can read configuration paramenter values here
+	if (status) {
+
+		config.bypass = true;
+		config.ON_STATE = ON;
+		config.bootStatus = SAVE_RELAY_STATUS;
+		config.bypassStatus = SAVE_RELAY_STATUS;
+		config.tArranq = 48;
+		config.tParo = 57;		
+		
+		if (!saveConfig ()) {
+			DEBUG_ERROR ("Error writting blind controller config to filesystem.");
+		} else {
+			DEBUG_WARN ("Configuration stored");
+		}
+	} else {
+		DEBUG_WARN ("Configuration does not need to be saved");
+	}
 }
 
 void CONTROLLER_CLASS_NAME::defaultConfig () {
 	
-	config.relayPin = RELAY_PIN;
+	//config.relayPin = RELAY_PIN;
 	config.bypass = true;
 	config.ON_STATE = ON;
 	config.bootStatus = SAVE_RELAY_STATUS;
 	config.bypassStatus = SAVE_RELAY_STATUS;
+	config.tArranq = 48;
+	config.tParo = 57;
 
 }
 
@@ -486,6 +589,8 @@ bool CONTROLLER_CLASS_NAME::loadConfig () {
 				} else {
 					config.bypassStatus = RELAY_OFF;
 				}
+				config.tArranq = doc["tArranq"].as<int> ();
+				config.tParo = doc["tParo"].as<int> ();
 			}
 
 			if (doc.containsKey ("relayStatus")) {
@@ -502,7 +607,7 @@ bool CONTROLLER_CLASS_NAME::loadConfig () {
 				DEBUG_WARN ("Smart switch controller configuration error");
 			}
 			DEBUG_WARN ("==== Smart switch Controller Configuration ====");
-			DEBUG_WARN ("Linked: %s", config.bypass ? "true" : "false");
+			DEBUG_WARN ("Bypass: %s", config.bypass ? "true" : "false");
 			DEBUG_WARN ("ON level: %s ", config.ON_STATE ? "HIGH" : "LOW");
 			DEBUG_WARN ("Boot relay status: %d ", config.bootStatus);
 
@@ -555,6 +660,8 @@ bool CONTROLLER_CLASS_NAME::saveConfig () {
 	doc["bootStatus"] = bootStatus;
 	int bypassStatus = config.bypassStatus;
 	doc["bypassStatus"] = bypassStatus;
+	doc["tArranq"] = config.tArranq;
+	doc["tParo"] = config.tParo;
 
 	if (serializeJson (doc, configFile) == 0) {
 		DEBUG_ERROR ("Failed to write to file");

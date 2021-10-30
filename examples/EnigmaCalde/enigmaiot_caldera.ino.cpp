@@ -197,7 +197,9 @@ void wifiManagerStarted () {
 void setup () {
 	
 	
-  	Serial.begin (115200); Serial.println (); Serial.println ("enigmaiot_Caldera-v2.1.1 --  Enigmav0.9.8");
+  	Serial.begin (115200); Serial.println (); Serial.printf ("enigmaiot_Caldera-vd.%d.%d.%d-Enigma-v%d.%d.%d",
+                  CALDERA_MY_VERS[0], CALDERA_MY_VERS[1], CALDERA_MY_VERS[2], ENIGMAIOT_PROT_VERS[0], ENIGMAIOT_PROT_VERS[1], ENIGMAIOT_PROT_VERS[2]);
+	
 	Serial.println ("----Reset Pin D5----");
 
 #ifdef ESP32
@@ -218,7 +220,7 @@ void setup () {
 	EnigmaIOTNode.onDisconnected (disconnectEventHandler);
 	EnigmaIOTNode.onDataRx (processRxData);
 	EnigmaIOTNode.enableClockSync (true); // Set to true if you need this node to get its clock syncronized with gateway
-	//EnigmaIOTNode.onWiFiManagerStarted (wifiManagerStarted);
+	EnigmaIOTNode.onWiFiManagerStarted (wifiManagerStarted);
 	EnigmaIOTNode.onWiFiManagerExit (wifiManagerExit);
 	EnigmaIOTNode.enableBroadcast ();
 
@@ -228,7 +230,7 @@ void setup () {
             DEBUG_WARN ("FILESYSTEM Formatted");
 	}
 
-	EnigmaIOTNode.begin (&Espnow_hal, NULL, NULL, true, SLEEPY == 1); // Start EnigmaIOT communication
+	EnigmaIOTNode.begin (&Espnow_hal, NULL, NULL, true, SLEEPY ); // Start EnigmaIOT communication
     
 	uint8_t macAddress[ENIGMAIOT_ADDR_LEN];
 #ifdef ESP8266
