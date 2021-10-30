@@ -14,144 +14,13 @@ constexpr auto CONFIG_FILE = "/customconf.json"; ///< @brief Custom configuratio
 // You may add some global variables you need here,
 // like serial port instances, I2C, etc
 // -----------------------------------------
-const char* relayKey = "rly";
-const char* commandKey = "cmd";
-
-const char* bypassKey = "bypass";
-
-NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
-
-OneWire oneWire(ONE_WIRE_BUS);
-
-DallasTemperature sensors(&oneWire);
-
-int termosta;
-unsigned long timeout;
-DeviceAddress termRetorno   =  { 0x28, 0x20, 0x47, 0x75, 0xD0, 0x01, 0x3C, 0xF9 }; //{0x28, 0xE2, 0xE4, 0x95, 0xF0, 0x01, 0x3C, 0xA8}; 
-DeviceAddress termPBaja     =  { 0x28, 0xFF, 0x34, 0xB6, 0x51, 0x17, 0x04, 0x78 }; //{0x28, 0xBE, 0xF7, 0x95, 0xF0, 0x01, 0x3C, 0xC9}; 
-DeviceAddress termPAlta     =  { 0x28, 0xFF, 0x95, 0x6C, 0x53, 0x17, 0x04, 0xD3 }; // {0x28, 0xCD, 0x22, 0x95, 0xF0, 0x01, 0x3C, 0x84}; 
-DeviceAddress termAcumula   =  { 0x28, 0xFF, 0xA8, 0xDE, 0x9E, 0x20, 0xD6, 0xC6 }; //{0x28, 0xDB, 0x69, 0x95, 0xF0, 0x01, 0x3C, 0xF4}; 
-
-bool /*bypass = true,*/ unaVez = true;
-const size_t capacity = JSON_OBJECT_SIZE (5);
-
-
-float tempRetorno, tempPBaja, tempPAlta, tempAcumula = 49, nivelPellets;
-
-
 
 bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint8_t* buffer, uint8_t length, nodeMessageType_t command, nodePayloadEncoding_t payloadEncoding) {
 	// Process incoming messages here
 	// They are normally encoded as MsgPack so you can confert them to JSON very easily
-    // Decode payload
-	DynamicJsonDocument doc (256);
-	uint8_t tempBuffer[MAX_MESSAGE_LENGTH];
-
-	memcpy (tempBuffer, buffer, length);
-	DeserializationError error = deserializeMsgPack (doc, tempBuffer, length);
-	// Check decoding
-	if (error != DeserializationError::Ok) {
-		DEBUG_WARN ("Error decoding command: %s", error.c_str ());
-		return false;
-	}
-
-	DEBUG_WARN ("Command: %d = %s", command, command == nodeMessageType_t::DOWNSTREAM_DATA_GET ? "GET" : "SET");
-
-	// Dump debug data
-	size_t strLen = measureJson (doc) + 1;
-	char* strBuffer = (char*)malloc (strLen);
-	serializeJson (doc, strBuffer, strLen);
-	DEBUG_WARN ("Data: %s", strBuffer);
-	free (strBuffer);
-
-	// Check cmd field on JSON data
-	if (!doc.containsKey (commandKey)) {
-		DEBUG_WARN ("Wrong format");
-		return false;
-	}
-
-	if (command == nodeMessageType_t::DOWNSTREAM_DATA_GET) {
-		if (!strcmp (doc[commandKey], relayKey)) {
-			DEBUG_WARN ("Request relay status. Relay = %s", config.relayStatus == ON ? "ON" : "OFF");
-			if (!sendRelayStatus ()) {
-				DEBUG_WARN ("Error sending relay status");
-				return false;
-			}
-		} else if (!strcmp (doc[commandKey], bypassKey)) {
-			DEBUG_WARN ("Request link status. Link = %s", config.bypass ? "enabled" : "disabled");
-			if (!sendBypassStatus ()) {
-				DEBUG_WARN ("Error sending link status");
-				return false;
-			}
-
-		} 
-	}
-
-	if (command == nodeMessageType_t::DOWNSTREAM_DATA_SET) {
-		if (!strcmp (doc[commandKey], relayKey)) {
-			if (!doc.containsKey (relayKey)) {
-				DEBUG_WARN ("Wrong format");
-				return false;
-			}
-			//DEBUG_WARN ("Set relay status. Relay = %s", doc[relayKey].as<bool> () ? "ON" : "OFF");
-
-			setRelay (doc[relayKey].as<bool> ());
-
-			if (!sendRelayStatus ()) {
-				DEBUG_WARN ("Error sending relay status");
-				return false;
-			}
-
-
-		} else if (!strcmp (doc[commandKey], bypassKey)) {
-			if (!doc.containsKey (bypassKey)) {
-				DEBUG_WARN ("Wrong format");
-				return false;
-			}
-			DEBUG_WARN ("Set link status. Link = %s", doc[bypassKey].as<bool> () ? "enabled" : "disabled");
-
-			setBypass (doc[bypassKey].as<bool> ());
-
-			if (!sendBypassStatus ()) {
-				DEBUG_WARN ("Error sending link status");
-				return false;
-			}
-
-		}else if (!strcmp (doc[commandKey], "tAcumula")) {
-			if (!doc.containsKey ("tAcumula")) {
-				DEBUG_WARN ("Wrong format");
-				return false;
-			}
-			DEBUG_WARN ("Set link status. Link = %s", doc[bypassKey].as<bool> () ? "enabled" : "disabled");
-
-			tempAcumula = (doc["tAcumula"].as<int> ());
-
-			
-		}
 	return true;
 }
-}
 
-bool CONTROLLER_CLASS_NAME::sendRelayStatus () {
-	const size_t capacity = JSON_OBJECT_SIZE (6);
-	DynamicJsonDocument json (capacity);
-
-	json[commandKey] = relayKey;
-    json[relayKey] = config.relayStatus ? 1 : 0;
-    
-
-	return sendJson (json);
-}
-
-bool CONTROLLER_CLASS_NAME::sendBypassStatus () {
-	const size_t capacity = JSON_OBJECT_SIZE (2);
-	DynamicJsonDocument json (capacity);
-
-	json[commandKey] = bypassKey;
-    json[bypassKey] = config.bypass ? 1 : 0;
-
-	return sendJson (json);
-}
 
 bool CONTROLLER_CLASS_NAME::sendCommandResp (const char* command, bool result) {
 	// Respond to command with a result: true if successful, false if failed 
@@ -162,13 +31,7 @@ void CONTROLLER_CLASS_NAME::connectInform () {
 
 #if SUPPORT_HA_DISCOVERY    
 // Register every HAEntity discovery function here. As many as you need
-    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAPBajaDiscovery, this));
-	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAPAltaDiscovery, this));
-	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHARetornoDiscovery, this));
-	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAAcumulaDiscovery, this));
-    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHABypassDiscovery, this));
-	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAPelletDiscovery, this));
-	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHACalderaDiscovery, this));
+    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHADiscovery, this));
 #endif
 
     EnigmaIOTjsonController::connectInform ();
@@ -179,180 +42,15 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 
     // You do node setup here. Use it as it was the normal setup() Arduino function
 
-	pinMode (config.relayPin, OUTPUT);
-	sensors.begin();
-	sensors.setResolution(termRetorno, 10);
-	sensors.setResolution(termPBaja, 10);
-	sensors.setResolution(termPAlta, 10);
-	sensors.setResolution(termAcumula, 10);
-
-    if (config.bootStatus != SAVE_RELAY_STATUS) {
-		config.relayStatus = (bool)config.bootStatus;
-		DEBUG_WARN ("Relay status set to Boot Status %d -> %d", config.bootStatus, config.relayStatus);
-	}
-	DEBUG_WARN ("Relay status set to %s", config.relayStatus ? "ON" : "OFF");
-	digitalWrite (config.relayPin, config.relayStatus);
-
     // Send a 'hello' message when initalizing is finished
-    sendStartAnouncement ();  // Disable this if node is sleepy
-    
+    if (!(enigmaIotNode->getNode ()->getSleepy ())) {
+        sendStartAnouncement ();  // Disable this if node is sleepy
+    }
+
 	DEBUG_DBG ("Finish begin");
 
 	// If your node should sleep after sending data do all remaining tasks here
 }
-
-void CONTROLLER_CLASS_NAME::setRelay (bool state) {
-	DEBUG_WARN ("Set relay %s", state ? "ON" : "OFF");
-	config.relayStatus = state;
-	digitalWrite (config.relayPin, config.relayStatus ? ON : OFF);
-	if (config.bootStatus == SAVE_RELAY_STATUS) {
-		if (saveConfig ()) {
-			DEBUG_WARN ("Config updated. Relay is %s", config.relayStatus ? "ON" : "OFF");
-		} else {
-			DEBUG_ERROR ("Error saving config");
-		}
-	}
-}
-
-void CONTROLLER_CLASS_NAME::setBypass (bool state) {
-	DEBUG_WARN ("Set link %s", state ? "ON" : "OFF");
-	config.bypass = state;
-	if (saveConfig ()) {
-		DEBUG_WARN ("Config updated. bypass");
-	} else {
-		DEBUG_ERROR ("Error saving config");
-	}
-}
-
-void CONTROLLER_CLASS_NAME::userCode(){
-	// Read sensor data
-		// Put here your code to read sensor and compose buffer
-			
-		//---------------------------------------------------------------------------
-		const size_t capacity = JSON_OBJECT_SIZE (6);
-		DynamicJsonDocument json (capacity);
-		
-		// locate devices on the bus
-		Serial.print("Locating devices...");
-		Serial.print("Found ");
-		Serial.print(sensors.getDeviceCount(), DEC);
-		Serial.println(" devices.");
-			
-		sensors.requestTemperatures();
-		// print the device information
-		tempRetorno = sensors.getTempC(termRetorno);
-		tempPBaja = sensors.getTempC(termPBaja);
-		tempPAlta = sensors.getTempC(termPAlta);
-		//tempAcumula = sensors.getTempC(termAcumula);
-		//int lecturas=0,suma=0;
-		int distancia;
-
-		Serial.printf ("tempRetorno: %f\n", tempRetorno);
-		Serial.printf ("tempPAlta: %f\n", tempPAlta);
-		Serial.printf ("tempPBaja: %f\n", tempPBaja);
-			
-		// Nivel
-		//msg.addAnalogInput (0, (float)(ESP.getVcc ()) / 1000);
-		//msg.addTemperature (1, 20.34);
-
-		//Serial.printf ("Vcc: %f\n", (float)(ESP.getVcc ()) / 1000);
-		
-		/*msg.addTemperature (8, tempRetorno);
-		msg.addTemperature (9, tempPBaja);
-		msg.addTemperature (10, tempPAlta);*/
-		
-		json["Retorno"] = tempRetorno;
-		json["PBaja"] = tempPBaja;
-		json["PAlta"] = tempPAlta;
-		json["Acumula"] = tempAcumula;
-
-		//sendJson (json);
-				
-		//sendMsgPack(json);
-		//--
-			
-		for(int i=0;i<3;i++){
-			delay(50);                     // Wait 50ms between pings (about 20 pings/sec). 29ms should be the shortest delay between pings.
-			Serial.print("Ping: ");
-			Serial.print(sonar.ping_cm()); // Send ping, get distance in cm and print result (0 = outside set distance range)
-			Serial.println("cm");
-			distancia= sonar.ping_cm();
-		}
-
-		if((distancia>3)&&(distancia<120)){
-			Serial.println("Medida correcta,envia");
-			nivelPellets = (120-distancia) * 0.83; //map(distancia,3,120,100,0);
-			
-			/*msg.addAnalogInput(11, nivelPellets);
-			msg.addDistance(35,distancia);*/
-			
-			json["Pellets"] = nivelPellets;
-			//sendMsgPack(json);
-			//--
-		/*json["idx"] = 35;
-		json["nvalue"] = 0;
-		json["svalue"] = String (distancia);
-		sendMsgPack(json);*/
-		//--
-		Serial.printf ("Distancia: %i\n", distancia);
-		Serial.printf ("Nivel pellets: %f\n", nivelPellets);
-		}
-		
-		json["termostato"] = termosta ? "ON" : "OFF";
-
-		
-		sendJson(json);
-		// End of user code
-}
-
-void CONTROLLER_CLASS_NAME::arranque(){
-	static int lastState = 1, tParo = 57, tArran = 48;
-	static bool permisoTemp = true;
-
-	const size_t capacity = JSON_OBJECT_SIZE (2);
-	DynamicJsonDocument json (capacity);
-	static time_t lastStart;
-	static const time_t START_PERIOD = 7200000;  // 2 horas
-
-	if (tempPBaja - tempRetorno < 6) tParo = 60; // Si el suelo esta frio aumento la histeresis
-	else tParo = 57;
-	
-	if ((tempAcumula < tArran) && (nivelPellets > 35))	termosta = HIGH;
-	else if( tempAcumula > tParo) termosta = LOW;
-
-	if(termosta == HIGH && unaVez){
-		unaVez = false;
-		
-		Serial.println("Demanda de caldera");
-	}
-	if ((termosta == HIGH) && config.bypass && permisoTemp && !lastState){
-		lastState = true;
-		
-		//digitalWrite (RELE_PIN,1);
-		setRelay(HIGH);
-		Serial.println("Orden arranque caldera");
-
-	}
-	else if (termosta == LOW && lastState == HIGH){
-		lastStart = millis();
-		permisoTemp = LOW;
-		unaVez = true;
-		//digitalWrite (RELE_PIN,0);
-		
-		setRelay(LOW);
-		lastState = false;
-		
-		/*json["caldera"] = 0;
-		sendMsgPack(json);*/
-		Serial.println("Desactivado 2 horas");
-	}
-	if (millis () - lastStart > START_PERIOD && !permisoTemp) {
-		permisoTemp = HIGH;
-		Serial.println("Arranque permitido por tiempo");
-	}
-
-}
-
 
 void CONTROLLER_CLASS_NAME::loop () {
 
@@ -366,16 +64,7 @@ void CONTROLLER_CLASS_NAME::loop () {
 		//json["meas"] = measurement;
 
 		//sendJson (json);
-	static clock_t lastSentStatus;
-    static clock_t sendStatusPeriod = 2000;
-    if (enigmaIotNode->isRegistered () && millis () - lastSentStatus > sendStatusPeriod) {
-        lastSentStatus = millis ();
-        sendStatusPeriod = 300000;
-        sendRelayStatus ();
-		//showTime ();
-		userCode();
-		arranque();
-    }
+
 }
 
 CONTROLLER_CLASS_NAME::~CONTROLLER_CLASS_NAME () {
@@ -393,146 +82,21 @@ void CONTROLLER_CLASS_NAME::configManagerExit (bool status) {
 	// You can read configuration paramenter values here
 }
 
-void CONTROLLER_CLASS_NAME::defaultConfig () {
-	
-	config.bypass = true;
-	config.ON_STATE = ON;
-	config.bootStatus = SAVE_RELAY_STATUS;
-
-}
-
 bool CONTROLLER_CLASS_NAME::loadConfig () {
 	// If you need to read custom configuration data do it here
-	bool json_correct = false;
-
-	if (!FILESYSTEM.begin ()) {
-		DEBUG_WARN ("Error starting filesystem. Formatting");
-        FILESYSTEM.format ();
-	}
-
-    // FILESYSTEM.remove (CONFIG_FILE); // Only for testing
-
-    if (FILESYSTEM.exists (CONFIG_FILE)) {
-		DEBUG_WARN ("Opening %s file", CONFIG_FILE);
-        File configFile = FILESYSTEM.open (CONFIG_FILE, "r");
-		if (configFile) {
-			size_t size = configFile.size ();
-			DEBUG_WARN ("%s opened. %u bytes", CONFIG_FILE, size);
-			DynamicJsonDocument doc (512);
-			DeserializationError error = deserializeJson (doc, configFile);
-			if (error) {
-				DEBUG_ERROR ("Failed to parse file");
-			} else {
-				DEBUG_WARN ("JSON file parsed");
-			}
-
-			if (doc.containsKey ("bypass") &&
-				doc.containsKey ("ON_STATE") &&
-				doc.containsKey ("bootStatus")) {
-
-				json_correct = true;
-				config.bypass = doc["linked"].as<bool> ();
-				config.ON_STATE = doc["ON_STATE"].as<int> ();
-				int bootStatus = doc["bootStatus"].as<int> ();
-				if (bootStatus >= RELAY_OFF && bootStatus <= SAVE_RELAY_STATUS) {
-					config.bootStatus = (bootRelayStatus_t)bootStatus;
-					DEBUG_WARN ("Boot status set to %d", config.bootStatus);
-				} else {
-					config.bootStatus = RELAY_OFF;
-				}
-			}
-
-			if (doc.containsKey ("relayStatus")) {
-				config.relayStatus = doc["relayStatus"].as<bool> ();
-			}
-
-			configFile.close ();
-			if (json_correct) {
-				DEBUG_WARN ("Smart switch controller configuration successfuly read");
-			} else {
-				DEBUG_WARN ("Smart switch controller configuration error");
-			}
-			DEBUG_WARN ("==== Smart switch Controller Configuration ====");
-			DEBUG_WARN ("Linked: %s", config.bypass ? "true" : "false");
-			DEBUG_WARN ("ON level: %s ", config.ON_STATE ? "HIGH" : "LOW");
-			DEBUG_WARN ("Boot relay status: %d ", config.bootStatus);
-
-
-			size_t jsonLen = measureJsonPretty (doc) + 1;
-			char* output = (char*)malloc (jsonLen);
-			serializeJsonPretty (doc, output, jsonLen);
-
-			DEBUG_WARN ("File content:\n%s", output);
-
-			free (output);
-
-		} else {
-			DEBUG_WARN ("Error opening %s", CONFIG_FILE);
-			defaultConfig ();
-		}
-	} else {
-		DEBUG_WARN ("%s do not exist", CONFIG_FILE);
-		defaultConfig ();
-	}
-
-	return json_correct;
+	return true;
 }
 
 bool CONTROLLER_CLASS_NAME::saveConfig () {
 	// If you need to save custom configuration data do it here
-	if (!FILESYSTEM.begin ()) {
-		DEBUG_WARN ("Error opening filesystem");
-		return false;
-	}
-	DEBUG_INFO ("Filesystem opened");
-
-    File configFile = FILESYSTEM.open (CONFIG_FILE, "w");
-	if (!configFile) {
-		DEBUG_WARN ("Failed to open config file %s for writing", CONFIG_FILE);
-		return false;
-	} else {
-		DEBUG_INFO ("%s opened for writting", CONFIG_FILE);
-	}
-
-	DynamicJsonDocument doc (512);
-
-	doc["bypass"] = config.bypass;
-	doc["ON_STATE"] = config.ON_STATE;
-	doc["relayStatus"] = config.relayStatus;
-	int bootStatus = config.bootStatus;
-	doc["bootStatus"] = bootStatus;
-
-	if (serializeJson (doc, configFile) == 0) {
-		DEBUG_ERROR ("Failed to write to file");
-		configFile.close ();
-        //FILESYSTEM.remove (CONFIG_FILE);
-		return false;
-	}
-
-	size_t jsonLen = measureJsonPretty (doc) + 1;
-	char* output = (char*)malloc (jsonLen);
-	serializeJsonPretty (doc, output, jsonLen);
-
-	DEBUG_DBG ("File content:\n%s", output);
-
-	free (output);
-
-	configFile.flush ();
-	size_t size = configFile.size ();
-
-	//configFile.write ((uint8_t*)(&mqttgw_config), sizeof (mqttgw_config));
-	configFile.close ();
-	DEBUG_DBG ("Smart Switch controller configuration saved to flash. %u bytes", size);
-
-	return true;	
+	return true;
 }
 
 #if SUPPORT_HA_DISCOVERY   
 // Repeat this method for every entity
-
-void CONTROLLER_CLASS_NAME::buildHABypassDiscovery () {
+void CONTROLLER_CLASS_NAME::buildHADiscovery () {
     // Select corresponding HAEntiny type
-    HASwitch* haEntity = new HASwitch ();
+    HATrigger* haEntity = new HATrigger ();
 
     uint8_t* msgPackBuffer;
 
@@ -544,57 +108,9 @@ void CONTROLLER_CLASS_NAME::buildHABypassDiscovery () {
     // *******************************
     // Add your characteristics here
     // There is no need to futher modify this function
-
-    haEntity->setNameSufix ("bypass");
-    haEntity->setStateOn (1);
-    haEntity->setStateOff (0);
-    haEntity->setValueField ("bypass");
-    haEntity->setPayloadOff ("{\"cmd\":\"bypass\",\"bypass\":0}");
-    haEntity->setPayloadOn ("{\"cmd\":\"bypass\",\"bypass\":1}");
-    // *******************************
-
-    size_t bufferLen = haEntity->measureMessage ();
-
-    msgPackBuffer = (uint8_t*)malloc (bufferLen);
-
-    size_t len = haEntity->getAnounceMessage (bufferLen, msgPackBuffer);
-
-    DEBUG_INFO ("Resulting MSG pack length: %d", len);
-
-    if (!sendHADiscovery (msgPackBuffer, len)) {
-        DEBUG_WARN ("Error sending HA discovery message");
-    }
-
-    if (haEntity) {
-        delete (haEntity);
-    }
-
-    if (msgPackBuffer) {
-        free (msgPackBuffer);
-    }
-}
-
-void CONTROLLER_CLASS_NAME::buildHAPBajaDiscovery () {
-    // Select corresponding HAEntiny type
-    HASensor* haEntity = new HASensor ();
-	
-    uint8_t* msgPackBuffer;
-
-    if (!haEntity) {
-        DEBUG_WARN ("JSON object instance does not exist");
-        return;
-    }
-
-    // *******************************
-    // Add your characteristics here
-    // There is no need to futher modify this function
-
-    haEntity->setNameSufix ("P.Baja");
-    haEntity->setDeviceClass (sensor_temperature);
-    haEntity->setExpireTime (3600);
-    haEntity->setUnitOfMeasurement ("ºC");
-    haEntity->setValueField ("PBaja");  // nombre del json del valor a capurar 
-    //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
+    
+    haEntity->setType (button_short_press);
+    haEntity->setSubtype (turn_on);
 
     // *******************************
 
@@ -617,233 +133,20 @@ void CONTROLLER_CLASS_NAME::buildHAPBajaDiscovery () {
     if (msgPackBuffer) {
         free (msgPackBuffer);
     }
-		
-}
-void CONTROLLER_CLASS_NAME::buildHAPAltaDiscovery () {
-    // Select corresponding HAEntiny type
-    HASensor* haEntity = new HASensor ();
-	
-    uint8_t* msgPackBuffer;
-
-    if (!haEntity) {
-        DEBUG_WARN ("JSON object instance does not exist");
-        return;
-    }
-
-    // *******************************
-    // Add your characteristics here
-    // There is no need to futher modify this function
-
-    haEntity->setNameSufix ("P.Alta");
-    haEntity->setDeviceClass (sensor_temperature);
-    haEntity->setExpireTime (3600);
-    haEntity->setUnitOfMeasurement ("ºC");
-    haEntity->setValueField ("PAlta");  // nombre del json del valor a capurar 
-    //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
-
-    // *******************************
-
-    size_t bufferLen = haEntity->measureMessage ();
-
-    msgPackBuffer = (uint8_t*)malloc (bufferLen);
-
-    size_t len = haEntity->getAnounceMessage (bufferLen, msgPackBuffer);
-
-    DEBUG_INFO ("Resulting MSG pack length: %d", len);
-
-    if (!sendHADiscovery (msgPackBuffer, len)) {
-        DEBUG_WARN ("Error sending HA discovery message");
-    }
-
-    if (haEntity) {
-        delete (haEntity);
-    }
-
-    if (msgPackBuffer) {
-        free (msgPackBuffer);
-    }
-		
-}
-void CONTROLLER_CLASS_NAME::buildHARetornoDiscovery () {
-    // Select corresponding HAEntiny type
-    HASensor* haEntity = new HASensor ();
-	
-    uint8_t* msgPackBuffer;
-
-    if (!haEntity) {
-        DEBUG_WARN ("JSON object instance does not exist");
-        return;
-    }
-
-    // *******************************
-    // Add your characteristics here
-    // There is no need to futher modify this function
-
-    haEntity->setNameSufix ("Retorno");
-    haEntity->setDeviceClass (sensor_temperature);
-    haEntity->setExpireTime (3600);
-    haEntity->setUnitOfMeasurement ("ºC");
-    haEntity->setValueField ("Retorno");  // nombre del json del valor a capurar 
-    //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
-
-    // *******************************
-
-    size_t bufferLen = haEntity->measureMessage ();
-
-    msgPackBuffer = (uint8_t*)malloc (bufferLen);
-
-    size_t len = haEntity->getAnounceMessage (bufferLen, msgPackBuffer);
-
-    DEBUG_INFO ("Resulting MSG pack length: %d", len);
-
-    if (!sendHADiscovery (msgPackBuffer, len)) {
-        DEBUG_WARN ("Error sending HA discovery message");
-    }
-
-    if (haEntity) {
-        delete (haEntity);
-    }
-
-    if (msgPackBuffer) {
-        free (msgPackBuffer);
-    }
-		
-}
-void CONTROLLER_CLASS_NAME::buildHAAcumulaDiscovery () {
-    // Select corresponding HAEntiny type
-    HASensor* haEntity = new HASensor ();
-	
-    uint8_t* msgPackBuffer;
-
-    if (!haEntity) {
-        DEBUG_WARN ("JSON object instance does not exist");
-        return;
-    }
-
-    // *******************************
-    // Add your characteristics here
-    // There is no need to futher modify this function
-
-    haEntity->setNameSufix ("Acumulador");
-    haEntity->setDeviceClass (sensor_temperature);
-    haEntity->setExpireTime (3600);
-    haEntity->setUnitOfMeasurement ("ºC");
-    haEntity->setValueField ("Acumula");  // nombre del json del valor a capurar 
-    //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
-
-    // *******************************
-
-    size_t bufferLen = haEntity->measureMessage ();
-
-    msgPackBuffer = (uint8_t*)malloc (bufferLen);
-
-    size_t len = haEntity->getAnounceMessage (bufferLen, msgPackBuffer);
-
-    DEBUG_INFO ("Resulting MSG pack length: %d", len);
-
-    if (!sendHADiscovery (msgPackBuffer, len)) {
-        DEBUG_WARN ("Error sending HA discovery message");
-    }
-
-    if (haEntity) {
-        delete (haEntity);
-    }
-
-    if (msgPackBuffer) {
-        free (msgPackBuffer);
-    }
-		
-}
-
-void CONTROLLER_CLASS_NAME::buildHACalderaDiscovery () {
-    // Select corresponding HAEntiny type
-    HABinarySensor* haBEntity = new HABinarySensor ();
-	
-    uint8_t* msgPackBuffer;
-
-    if (!haBEntity) {
-        DEBUG_WARN ("JSON object instance does not exist");
-        return;
-    }
-
-    // *******************************
-    // Add your characteristics here
-    // There is no need to futher modify this function
-
-    haBEntity->setNameSufix ("Caldera");
-	haBEntity->setDeviceClass (bs_heat);
-    haBEntity->addExpiration (3600);
-	haBEntity->setPayloadOff ("OFF");
-    haBEntity->setPayloadOn ("ON");
-    haBEntity->setValueField ("rly");  // nombre del json del valor a capurar 
-    //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
-
-    // *******************************
-
-    size_t bufferLen = haBEntity->measureMessage ();
-
-    msgPackBuffer = (uint8_t*)malloc (bufferLen);
-
-    size_t len = haBEntity->getAnounceMessage (bufferLen, msgPackBuffer);
-
-    DEBUG_INFO ("Resulting MSG pack length: %d", len);
-
-    if (!sendHADiscovery (msgPackBuffer, len)) {
-        DEBUG_WARN ("Error sending HA discovery message");
-    }
-
-    if (haBEntity) {
-        delete (haBEntity);
-    }
-
-    if (msgPackBuffer) {
-        free (msgPackBuffer);
-    }
-		
-}
-void CONTROLLER_CLASS_NAME::buildHAPelletDiscovery () {
-    // Select corresponding HAEntiny type
-    HASensor* haEntity = new HASensor ();
-	
-    uint8_t* msgPackBuffer;
-
-    if (!haEntity) {
-        DEBUG_WARN ("JSON object instance does not exist");
-        return;
-    }
-
-    // *******************************
-    // Add your characteristics here
-    // There is no need to futher modify this function
-
-    haEntity->setNameSufix ("Pellt");
-    haEntity->setDeviceClass (sensor_humidity);
-    haEntity->setExpireTime (3600);
-    haEntity->setUnitOfMeasurement ("%");
-    haEntity->setValueField ("Pellets");  // nombre del json del valor a capurar 
-    //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
-
-    // *******************************
-
-    size_t bufferLen = haEntity->measureMessage ();
-
-    msgPackBuffer = (uint8_t*)malloc (bufferLen);
-
-    size_t len = haEntity->getAnounceMessage (bufferLen, msgPackBuffer);
-
-    DEBUG_INFO ("Resulting MSG pack length: %d", len);
-
-    if (!sendHADiscovery (msgPackBuffer, len)) {
-        DEBUG_WARN ("Error sending HA discovery message");
-    }
-
-    if (haEntity) {
-        delete (haEntity);
-    }
-
-    if (msgPackBuffer) {
-        free (msgPackBuffer);
-    }
-		
 }
 #endif // SUPPORT_HA_DISCOVERY
+
+    © 2021 GitHub, Inc.
+    Terms
+    Privacy
+    Security
+    Status
+    Docs
+
+    Contact GitHub
+    Pricing
+    API
+    Training
+    Blog
+    About
+
