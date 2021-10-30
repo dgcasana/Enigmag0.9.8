@@ -197,7 +197,7 @@ void wifiManagerStarted () {
 void setup () {
 	
 	
-  	Serial.begin (921600); Serial.println (); Serial.println ("enigmaiot_Caldera-v2.1.1 --  Enigmav0.9.8");
+  	Serial.begin (115200); Serial.println (); Serial.println ("enigmaiot_Caldera-v2.1.1 --  Enigmav0.9.8");
 	Serial.println ("----Reset Pin D5----");
 
 #ifdef ESP32

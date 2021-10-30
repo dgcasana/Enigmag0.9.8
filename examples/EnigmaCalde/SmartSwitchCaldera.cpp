@@ -35,6 +35,11 @@ DeviceAddress termAcumula   =  {0x28, 0xDB, 0x69, 0x95, 0xF0, 0x01, 0x3C, 0xF4};
 bool /*bypass = true,*/ unaVez = true;
 const size_t capacity = JSON_OBJECT_SIZE (5);
 
+int lastState = 1;
+bool permisoTemp = true;
+static time_t lastStart;
+
+
 
 float tempRetorno, tempPBaja, tempPAlta, tempAcumula = 49, nivelPellets;
 
@@ -229,6 +234,18 @@ void CONTROLLER_CLASS_NAME::setRelay (bool state) {
 			DEBUG_ERROR ("Error saving config");
 		}
 	}
+	if(state){
+		lastState = true;
+	}else{
+		lastStart = millis();
+		permisoTemp = LOW;
+		unaVez = true;
+		
+		
+		
+		lastState = false;
+	}
+
 }
 
 void CONTROLLER_CLASS_NAME::setBypass (bool state) {
@@ -323,12 +340,12 @@ void CONTROLLER_CLASS_NAME::userCode(){
 }
 
 void CONTROLLER_CLASS_NAME::arranque(){
-	static int lastState = 1, tParo = 57, tArran = 48;
-	static bool permisoTemp = true;
+	static tParo = 57, tArran = 48;
+	
 
 	const size_t capacity = JSON_OBJECT_SIZE (2);
 	DynamicJsonDocument json (capacity);
-	static time_t lastStart;
+	
 	static const time_t START_PERIOD = 300000;  //7200000;  // 2 horas
 
 	if (tempPBaja - tempRetorno < 6) tParo = 60; // Si el suelo esta frio aumento la histeresis
@@ -343,7 +360,7 @@ void CONTROLLER_CLASS_NAME::arranque(){
 		Serial.println("Demanda de caldera");
 	}
 	if ((termosta == HIGH) && config.bypass && permisoTemp && !lastState){
-		lastState = true;
+		
 		
 		//digitalWrite (RELE_PIN,1);
 		setRelay(HIGH);
@@ -351,12 +368,14 @@ void CONTROLLER_CLASS_NAME::arranque(){
 
 	}
 	else if (termosta == LOW && lastState == HIGH){
+		setRelay(LOW);
+		
 		lastStart = millis();
 		permisoTemp = LOW;
 		unaVez = true;
 		//digitalWrite (RELE_PIN,0);
 		
-		setRelay(LOW);
+		
 		lastState = false;
 		
 		/*json["caldera"] = 0;

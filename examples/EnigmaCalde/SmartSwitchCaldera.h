@@ -11,10 +11,6 @@
 
 //#define DEBUG_SERIAL
 
-#ifdef ESP32
-#include <SPIFFS.h>
-#endif
-
 #include <EnigmaIOTjsonController.h>
 #define CONTROLLER_CLASS_NAME SmartSwitchController
 static const char* CONTROLLER_NAME = "Caldera controller";
@@ -33,10 +29,11 @@ static const char* CONTROLLER_NAME = "Caldera controller";
 // --------------------------------------------------
 // You may define data structures and constants here
 // --------------------------------------------------
-#define DEFAULT_BUTTON_PIN D0 
+
+#define RELAY_PIN D1
 #define ECHO_PIN     D2  // Arduino pin tied to echo pin on the ultrasonic sensor.
 #define TRIGGER_PIN  D3  // Arduino pin tied to trigger pin on the ultrasonic sensor.
-#define DEFAULT_RELAY_PIN D4
+
 #define RESET_PIN D5 // You can set a different configuration reset pin here. Check for conflicts with used pins.
 //#define PBAJA_PIN D5
 #define ONE_WIRE_BUS D6
@@ -44,16 +41,10 @@ static const char* CONTROLLER_NAME = "Caldera controller";
 
 #define MAX_DISTANCE 200 // Maximum distance we want to ping for (in centimeters). Maximum sensor distance is rated at 400-500cm.
 
-static const uint8_t CALDERA_MY_VERS[3] = { 2,1,1 }; ///< @brief Caldera Version
-
-
-
 #define ON HIGH
 #define OFF !ON
 
-
-
-
+static const uint8_t CALDERA_MY_VERS[3] = { 2,1,1 }; ///< @brief Caldera Version
 
 typedef enum {
 	RELAY_OFF = 0,
@@ -61,40 +52,56 @@ typedef enum {
 	SAVE_RELAY_STATUS = 2
 } bootRelayStatus_t;
 
+
 struct smartSwitchControllerHw_t {
 	int relayPin;
 	bool relayStatus;
-	uint8_t buttonPin;
-	bool linked;
+	bool bypass;
 	bootRelayStatus_t bootStatus;
+	bootRelayStatus_t bypassStatus;
 	int ON_STATE;
+	//int BY_STATE;
 };
+
 
 class CONTROLLER_CLASS_NAME : EnigmaIOTjsonController {
 protected:
 	// --------------------------------------------------
 	// add all parameters that your project needs here
 	// --------------------------------------------------
-	bool pushTriggered = false;
-	bool pushReleased = true;
-	smartSwitchControllerHw_t config;
-	AsyncWiFiManagerParameter* buttonPinParam;
-	AsyncWiFiManagerParameter* relayPinParam;
-	AsyncWiFiManagerParameter* bootStatusParam;
-	AsyncWiFiManagerParameter* bootStatusListParam;
+
+    smartSwitchControllerHw_t config;
 
 public:
+    /**
+     * @brief Initializes controller structures
+     * @param node Pointer to EnigmaIOT gateway instance
+     * @param data Parameter data for controller
+     */
 	void setup (EnigmaIOTNodeClass* node, void* data = NULL);
 
+    /**
+     * @brief Processes received GET or SET commands
+     * @param address Origin MAC address
+     * @param buffer Command payload
+     * @param length Payload length in bytes
+     * @param command Command type. nodeMessageType_t::DOWNSTREAM_DATA_GET or nodeMessageType_t::DOWNSTREAM_DATA_SET
+     * @param payloadEncoding Payload encoding. MSG_PACK is recommended
+     */
 	bool processRxCommand (const uint8_t* address, const uint8_t* buffer, uint8_t length, nodeMessageType_t command, nodePayloadEncoding_t payloadEncoding);
 
+    /**
+     * @brief Executes repetitive tasks on controller
+     */
 	void loop ();
 
+    /**
+     * @brief Default destructor
+     */
 	~CONTROLLER_CLASS_NAME ();
 
 	/**
 	 * @brief Called when wifi manager starts config portal
-	 * @param node< Pointer to EnigmaIOT gateway instance
 	 */
 	void configManagerStart ();
 
@@ -110,6 +117,9 @@ public:
 	 */
 	bool loadConfig ();
 
+    /**
+     * @brief Executed as soon as node is registered on EnigmaIOT network
+     */
     void connectInform ();
 
 protected:
@@ -119,8 +129,16 @@ protected:
 	  */
 	bool saveConfig ();
 
+    /**
+     * @brief Send response to commands to gateway
+     * @param command Refered command
+     * @param result `true` if command was correctly executed, `false` otherwise
+     */
 	bool sendCommandResp (const char* command, bool result);
 
+    /**
+     * @brief Sends a notification message including configurable controller name and protocol version
+     */
     bool sendStartAnouncement () {
         // You can send a 'hello' message when your node starts. Useful to detect unexpected reboot
         const size_t capacity = JSON_OBJECT_SIZE (10);
@@ -139,10 +157,10 @@ protected:
      * @brief Sends a HA discovery message for a single entity. Add as many functions like this
      * as number of entities you need to create
      */
-    
-	void buildHAPBajaDiscovery ();
+
+    void buildHAPBajaDiscovery ();
 	void buildHAPAltaDiscovery ();
-	void buildHAPrincipalDiscovery ();
+	void buildHARetornoDiscovery ();
 	void buildHAAcumulaDiscovery ();
     void buildHABypassDiscovery ();
 	void buildHAPelletDiscovery ();
@@ -151,30 +169,22 @@ protected:
 	// ------------------------------------------------------------
 	// You may add additional method definitions that you need here
 	// ------------------------------------------------------------
-	void defaultConfig ();
-
-	void toggleRelay ();
-
-	void setRelay (bool state);
+    void defaultConfig ();
+    
+    void setRelay (bool state);
 
 	bool sendRelayStatus ();
 
-	void sendMsgPack (DynamicJsonDocument json);
+    void setBypass (bool state);
 
-	void userCode();
+	bool sendBypassStatus ();
+    
+    void userCode();
 
 	void arranque();
 
-	void showTime ();
-
-	void setLinked (bool state);
-
-	bool sendLinkStatus ();
-
-	void setBoot (int state);
-
-	bool sendBootStatus ();
 };
 
 #endif
+
 
