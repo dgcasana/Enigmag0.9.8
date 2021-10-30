@@ -206,7 +206,7 @@ void doRestart () {
 #if SUPPORT_HA_DISCOVERY
 void processHADiscovery (const char* topic, char* message, size_t len) {
     DEBUG_INFO ("About to process HA discovery. Len: %d - %s --> %.*s", len, topic, len, message);
-    GwOutput.rawMsgSend (topic, message, len, true);
+    GwOutput.rawMsgSend (topic, message, len, false);
 }
 #endif
 
@@ -380,7 +380,7 @@ void nodeDisconnected (uint8_t* mac, gwInvalidateReason_t reason) {
 //#endif // ESP32
 
 void setup () {
-	Serial.begin (921600); Serial.println (); Serial.println ();
+	Serial.begin (115200); Serial.println (); Serial.println ();
 
 #ifdef ESP32
 // Turn-off the 'brownout detector' to avoid random restarts during wake up,
