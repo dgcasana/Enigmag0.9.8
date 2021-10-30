@@ -35,7 +35,7 @@ DeviceAddress termAcumula   =  {0x28, 0xDB, 0x69, 0x95, 0xF0, 0x01, 0x3C, 0xF4};
 bool /*bypass = true,*/ unaVez = true;
 const size_t capacity = JSON_OBJECT_SIZE (5);
 
-int lastState = 1;
+int lastState = 1, tParo = 57, tArran = 48;
 bool permisoTemp = true;
 static time_t lastStart;
 
@@ -340,7 +340,7 @@ void CONTROLLER_CLASS_NAME::userCode(){
 }
 
 void CONTROLLER_CLASS_NAME::arranque(){
-	static tParo = 57, tArran = 48;
+	
 	
 
 	const size_t capacity = JSON_OBJECT_SIZE (2);
