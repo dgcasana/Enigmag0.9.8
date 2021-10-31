@@ -22,6 +22,8 @@ const char* infoKey = "info";
 const char* tParoKey = "tParo";
 const char* tArranqueKey = "tArranque";
 
+const time_t START_PERIOD = 300000;  //7200000;  // 2 horas
+
 NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
 
 OneWire oneWire(ONE_WIRE_BUS);
@@ -38,7 +40,7 @@ DeviceAddress termAcumula   =  {0x28, 0xDB, 0x69, 0x95, 0xF0, 0x01, 0x3C, 0xF4};
 bool /*bypass = true,*/ unaVez = true;
 const size_t capacity = JSON_OBJECT_SIZE (5);
 
-int lastState = 1;//, tParo, tArran;
+int lastState = 0;//, tParo, tArran;
 bool permisoTemp = true;
 static time_t lastStart;
 
@@ -205,17 +207,15 @@ bool CONTROLLER_CLASS_NAME::sendBypassStatus () {
 }
 
 bool CONTROLLER_CLASS_NAME::sendNodeStatus () {
-	const size_t capacity = JSON_OBJECT_SIZE (5);
+	const size_t capacity = JSON_OBJECT_SIZE (6);
 	DynamicJsonDocument json (capacity);
-
-	//int lastState = 1, tParo = 57, tArran = 48;
-	//bool permisoTemp = true;
 
 	json["lastState"] = lastState;
     json[bypassKey] = config.bypass ? 1 : 0;
+	json[relayKey] = config.relayStatus ? 1 : 0;
 	json["tParo"] = config.tParo;
 	json["tArranque"] = config.tArranq;
-	json["PermTemp"] = permisoTemp ? "Si" : "No";
+	json["PerTempo"] = permisoTemp ? "Si" : "No";
 	return sendJson (json);
 }
 
@@ -266,7 +266,8 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 		DEBUG_WARN ("Relay status set to Boot Status %d -> %d", config.bootStatus, config.relayStatus);
 	}
 	DEBUG_WARN ("Relay status set to %s", config.relayStatus ? "ON" : "OFF");
-	digitalWrite (RELAY_PIN, config.relayStatus);
+	
+	setRelay(config.relayStatus);
 
 	//tArran = config.tArranq;
 	//tParo = config.tParo;
@@ -282,6 +283,7 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
         sendStartAnouncement ();  // Disable this if node is sleepy
     }
 
+	
 	DEBUG_DBG ("Finish begin");
 
 	// If your node should sleep after sending data do all remaining tasks here
@@ -291,6 +293,16 @@ void CONTROLLER_CLASS_NAME::setRelay (bool state) {
 	DEBUG_WARN ("Set relay %s", state ? "ON" : "OFF");
 	config.relayStatus = state;
 	digitalWrite (RELAY_PIN, config.relayStatus ? ON : OFF);
+
+	if(state){
+		lastState = true;
+	}else{
+		lastStart = millis();
+		permisoTemp = LOW;
+		unaVez = true;
+		lastState = false;
+	}
+
 	if (config.bootStatus == SAVE_RELAY_STATUS) {
 		if (saveConfig ()) {
 			DEBUG_WARN ("Config updated. Relay is %s", config.relayStatus ? "ON" : "OFF");
@@ -298,17 +310,7 @@ void CONTROLLER_CLASS_NAME::setRelay (bool state) {
 			DEBUG_ERROR ("Error saving config");
 		}
 	}
-	if(state){
-		lastState = true;
-	}else{
-		lastStart = millis();
-		permisoTemp = LOW;
-		unaVez = true;
-		
-		
-		
-		lastState = false;
-	}
+	
 
 }
 
@@ -430,42 +432,38 @@ void CONTROLLER_CLASS_NAME::arranque(){
 	const size_t capacity = JSON_OBJECT_SIZE (2);
 	DynamicJsonDocument json (capacity);
 	
-	static const time_t START_PERIOD = 300000;  //7200000;  // 2 horas
+	
 
-	if (tempPBaja - tempRetorno < 6) tParoVar = 60; // Si el suelo esta frio aumento la histeresis
+	if (tempPBaja - tempRetorno > 6) tParoVar = 60; // Si el suelo esta frio aumento la histeresis
 	else tParoVar = config.tParo;
 	
-	if ((tempAcumula < config.tArranq) && (nivelPellets > 35))	termosta = HIGH;
-	else if( tempAcumula > tParoVar) termosta = LOW;
+	if ((tempAcumula < config.tArranq) && (nivelPellets > 35)){
+		termosta = HIGH;
+		if (config.bypass && permisoTemp && !lastState){
+			setRelay(HIGH);
+			Serial.println("Orden arranque caldera");
+
+		}
+	}	
+	else if( tempAcumula > tParoVar) {
+		termosta = LOW;
+		if (lastState == HIGH){
+			setRelay(LOW);
+			lastStart = millis();
+			permisoTemp = LOW;
+			unaVez = true;
+			
+			Serial.println("Desactivado 2 horas");
+		}
+	}
 
 	if(termosta == HIGH && unaVez){
 		unaVez = false;
 		
 		Serial.println("Demanda de caldera");
 	}
-	if ((termosta == HIGH) && config.bypass && permisoTemp && !lastState){
-		
-		
-		//digitalWrite (RELE_PIN,1);
-		setRelay(HIGH);
-		Serial.println("Orden arranque caldera");
-
-	}
-	else if (termosta == LOW && lastState == HIGH){
-		setRelay(LOW);
-		
-		lastStart = millis();
-		permisoTemp = LOW;
-		unaVez = true;
-		//digitalWrite (RELE_PIN,0);
-		
-		
-		lastState = false;
-		
-		/*json["caldera"] = 0;
-		sendMsgPack(json);*/
-		Serial.println("Desactivado 2 horas");
-	}
+	
+	
 	if (millis () - lastStart > START_PERIOD && !permisoTemp) {
 		permisoTemp = HIGH;
 		Serial.println("Arranque permitido por tiempo");
@@ -490,7 +488,7 @@ void CONTROLLER_CLASS_NAME::loop () {
     static clock_t sendStatusPeriod = 2000;
     if (enigmaIotNode->isRegistered () && millis () - lastSentStatus > sendStatusPeriod) {
         lastSentStatus = millis ();
-        sendStatusPeriod = 300000;
+        sendStatusPeriod = 60000;//300000;
         sendRelayStatus ();
 		//showTime ();
 		userCode();
@@ -573,7 +571,7 @@ bool CONTROLLER_CLASS_NAME::loadConfig () {
 				doc.containsKey ("bootStatus")) {
 
 				json_correct = true;
-				config.bypass = doc["linked"].as<bool> ();
+				//config.bypass = doc["linked"].as<bool> ();
 				config.ON_STATE = doc["ON_STATE"].as<int> ();
 				int bootStatus = doc["bootStatus"].as<int> ();
 				int bypassStatus = doc["bypassStatus"].as<int> ();
