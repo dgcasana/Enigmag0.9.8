@@ -41,7 +41,7 @@ bool /*bypass = true,*/ unaVez = true;
 const size_t capacity = JSON_OBJECT_SIZE (5);
 
 int lastState = 0;//, tParo, tArran;
-bool permisoTemp = true;
+bool perTempo = true;
 static time_t lastStart;
 
 
@@ -215,7 +215,7 @@ bool CONTROLLER_CLASS_NAME::sendNodeStatus () {
 	json[relayKey] = config.relayStatus ? 1 : 0;
 	json["tParo"] = config.tParo;
 	json["tArranque"] = config.tArranq;
-	json["PerTempo"] = permisoTemp ? "Si" : "No";
+	json["PerTempo"] = perTempo ? "Si" : "No";
 	return sendJson (json);
 }
 
@@ -298,7 +298,7 @@ void CONTROLLER_CLASS_NAME::setRelay (bool state) {
 		lastState = true;
 	}else{
 		lastStart = millis();
-		permisoTemp = LOW;
+		
 		unaVez = true;
 		lastState = false;
 	}
@@ -434,12 +434,20 @@ void CONTROLLER_CLASS_NAME::arranque(){
 	
 	
 
-	if (tempPBaja - tempRetorno > 6) tParoVar = 60; // Si el suelo esta frio aumento la histeresis
-	else tParoVar = config.tParo;
+	if (tempPBaja - tempRetorno > 6) {
+		tParoVar = 60; // Si el suelo esta frio aumento la histeresis
+		json["tParoVar"]= tParoVar;
+		sendJson(json);
+	}
+	else {
+		tParoVar = config.tParo;
+		json["tParoVar"]= tParoVar;
+		sendJson(json);
+	}
 	
 	if ((tempAcumula < config.tArranq) && (nivelPellets > 35)){
 		termosta = HIGH;
-		if (config.bypass && permisoTemp && !lastState){
+		if (config.bypass && perTempo && !lastState){
 			setRelay(HIGH);
 			Serial.println("Orden arranque caldera");
 
@@ -450,7 +458,7 @@ void CONTROLLER_CLASS_NAME::arranque(){
 		if (lastState == HIGH){
 			setRelay(LOW);
 			lastStart = millis();
-			permisoTemp = LOW;
+			perTempo = LOW;
 			unaVez = true;
 			
 			Serial.println("Desactivado 2 horas");
@@ -464,8 +472,8 @@ void CONTROLLER_CLASS_NAME::arranque(){
 	}
 	
 	
-	if (millis () - lastStart > START_PERIOD && !permisoTemp) {
-		permisoTemp = HIGH;
+	if (millis () - lastStart > START_PERIOD && !perTempo) {
+		perTempo = HIGH;
 		Serial.println("Arranque permitido por tiempo");
 	}
 
