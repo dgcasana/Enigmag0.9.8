@@ -22,7 +22,7 @@ const char* infoKey = "info";
 const char* tParoKey = "tParo";
 const char* tArranqueKey = "tArranque";
 
-const time_t START_PERIOD = 300000;  //7200000;  // 2 horas
+const time_t START_PERIOD = 7200000;  // 2 horas
 
 NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
 
@@ -32,10 +32,10 @@ DallasTemperature sensors(&oneWire);
 
 int termosta;
 unsigned long timeout;
-DeviceAddress termRetorno   =  {0x28, 0xE2, 0xE4, 0x95, 0xF0, 0x01, 0x3C, 0xA8};//{ 0x28, 0x20, 0x47, 0x75, 0xD0, 0x01, 0x3C, 0xF9 }; // 
-DeviceAddress termPBaja     =  {0x28, 0xBE, 0xF7, 0x95, 0xF0, 0x01, 0x3C, 0xC9}; //{ 0x28, 0xFF, 0x34, 0xB6, 0x51, 0x17, 0x04, 0x78 }; //
-DeviceAddress termPAlta     =  {0x28, 0xCD, 0x22, 0x95, 0xF0, 0x01, 0x3C, 0x84}; //{ 0x28, 0xFF, 0x95, 0x6C, 0x53, 0x17, 0x04, 0xD3 }; // 
-DeviceAddress termAcumula   =  {0x28, 0xDB, 0x69, 0x95, 0xF0, 0x01, 0x3C, 0xF4}; //{ 0x28, 0xFF, 0xA8, 0xDE, 0x9E, 0x20, 0xD6, 0xC6 }; //
+DeviceAddress termRetorno   =  { 0x28, 0x20, 0x47, 0x75, 0xD0, 0x01, 0x3C, 0xF9 }; // {0x28, 0xE2, 0xE4, 0x95, 0xF0, 0x01, 0x3C, 0xA8};//
+DeviceAddress termPBaja     =  { 0x28, 0xFF, 0x34, 0xB6, 0x51, 0x17, 0x04, 0x78 }; // {0x28, 0xBE, 0xF7, 0x95, 0xF0, 0x01, 0x3C, 0xC9}; //
+DeviceAddress termPAlta     =  { 0x28, 0xFF, 0x95, 0x6C, 0x53, 0x17, 0x04, 0xD3 }; // {0x28, 0xCD, 0x22, 0x95, 0xF0, 0x01, 0x3C, 0x84}; //
+DeviceAddress termAcumula   =  { 0x28, 0xFF, 0xA8, 0xDE, 0x9E, 0x20, 0xD6, 0xC6 }; // {0x28, 0xDB, 0x69, 0x95, 0xF0, 0x01, 0x3C, 0xF4}; //
 
 bool /*bypass = true,*/ unaVez = true;
 const size_t capacity = JSON_OBJECT_SIZE (5);
@@ -46,7 +46,7 @@ static time_t lastStart;
 
 
 
-float tempRetorno, tempPBaja, tempPAlta, tempAcumula = 49, nivelPellets;
+float tempRetorno, tempPBaja, tempPAlta, tempAcumula, nivelPellets;
 
 
 
@@ -150,15 +150,6 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 				DEBUG_WARN ("Error sending link status");
 				return false;
 			}
-
-		}else if (!strcmp (doc[commandKey], "tAcumula")) {
-			if (!doc.containsKey ("tAcumula")) {
-				DEBUG_WARN ("Wrong format");
-				return false;
-			}
-			DEBUG_WARN ("Set temp Acumula. tAcumula = %i", doc["tAcumula"].as<int> ());
-
-			tempAcumula = (doc["tAcumula"].as<int> ());
 
 		}else if (!strcmp (doc[commandKey], tParoKey)) {
 			if (!doc.containsKey (tParoKey)) {
@@ -363,7 +354,7 @@ void CONTROLLER_CLASS_NAME::userCode(){
 		tempRetorno = sensors.getTempC(termRetorno);
 		tempPBaja = sensors.getTempC(termPBaja);
 		tempPAlta = sensors.getTempC(termPAlta);
-		//tempAcumula = sensors.getTempC(termAcumula);
+		tempAcumula = sensors.getTempC(termAcumula);
 		//int lecturas=0,suma=0;
 		int distancia;
 
@@ -396,7 +387,7 @@ void CONTROLLER_CLASS_NAME::userCode(){
 			Serial.print("Ping: ");
 			Serial.print(sonar.ping_cm()); // Send ping, get distance in cm and print result (0 = outside set distance range)
 			Serial.println("cm");
-			distancia= 35;//sonar.ping_cm();
+			sonar.ping_cm();
 		}
 
 		if((distancia>3)&&(distancia<120)){
@@ -445,7 +436,7 @@ void CONTROLLER_CLASS_NAME::arranque(){
 		sendJson(json);
 	}
 	
-	if ((tempAcumula < config.tArranq) && (nivelPellets > 35)){
+	if ((0 < tempAcumula < config.tArranq) && (nivelPellets > 35)){
 		termosta = HIGH;
 		if (config.bypass && perTempo && !lastState){
 			setRelay(HIGH);
@@ -493,10 +484,10 @@ void CONTROLLER_CLASS_NAME::loop () {
 
 		//sendJson (json);
 	static clock_t lastSentStatus;
-    static clock_t sendStatusPeriod = 2000;
+    static clock_t sendStatusPeriod = 30000;
     if (enigmaIotNode->isRegistered () && millis () - lastSentStatus > sendStatusPeriod) {
         lastSentStatus = millis ();
-        sendStatusPeriod = 60000;//300000;
+        sendStatusPeriod = 300000;
         sendRelayStatus ();
 		//showTime ();
 		userCode();
