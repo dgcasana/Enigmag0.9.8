@@ -1,7 +1,7 @@
 // BasicController.h
 
-#ifndef _COMPOSTCONTROLLER_h
-#define _COMPOSTCONTROLLER_h
+#ifndef _PUERTACOCHERA_h
+#define _PUERTACOCHERA_h
 
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
@@ -16,37 +16,27 @@
 #endif
 
 #include <EnigmaIOTjsonController.h>
-#define CONTROLLER_CLASS_NAME CompostController
-static const char* CONTROLLER_NAME = "Compost controller";
+#define CONTROLLER_CLASS_NAME DashButtonController
+static const char* CONTROLLER_NAME = "Puerta Cochera";
+
 #if SUPPORT_HA_DISCOVERY    
-#include <haSensor.h>
+#include <haBinarySensor.h>
 #endif
 
-#include <DallasTemperature.h>
-#include <HTU21D.h>
-#include <Wire.h>
 // --------------------------------------------------
 // You may define data structures and constants here
 // --------------------------------------------------
 
+#define CARRO_PIN D5 // Nos indica si el carro esta abriendo o cerrando.
 
-static const uint8_t PUERTA_MY_VERS[3] = { 1,0,1 }; ///< @brief Compost Version
+static const uint8_t PUERTA_MY_VERS[3] = { 0,0,1 }; ///< @brief Caldera Version
 
 class CONTROLLER_CLASS_NAME : EnigmaIOTjsonController {
 protected:
 	// --------------------------------------------------
 	// add all parameters that your project needs here
 	// --------------------------------------------------
-	
-	DallasTemperature* sensors;
-    DeviceAddress insideThermometer;
-    bool tempSent = false;
-	//bool tempSent2 = false;
-    float tempC;
-	float   temperature = 0;
-	float   humidity    = 0;
-
-
+    bool carroPressSent = false;
 public:
 	void setup (EnigmaIOTNodeClass* node, void* data = NULL);
 
@@ -58,7 +48,6 @@ public:
 
 	/**
 	 * @brief Called when wifi manager starts config portal
-	 * @param node Pointer to EnigmaIOT gateway instance
 	 */
 	void configManagerStart ();
 
@@ -99,24 +88,11 @@ protected:
         return sendJson (json);
     }
 
-#if SUPPORT_HA_DISCOVERY    
-    /**
-     * @brief Sends a HA discovery message for a single entity. Add as many functions like this
-     * as number of entities you need to create
-     */
-    void buildHADs18b20Discovery ();
-	void buildHAAht10TempDiscovery ();
-	void buildHAAht10HumDiscovery ();
-	void buildHABattDiscovery ();
-#endif
+    void buildHADiscovery ();
     
-    // ------------------------------------------------------------
+	// ------------------------------------------------------------
 	// You may add additional method definitions that you need here
 	// ------------------------------------------------------------
-
-    //bool sendTemperature (float temp);
-	bool sendTempHum (float tempC, float temp, float hum);
-
 };
 
 #endif

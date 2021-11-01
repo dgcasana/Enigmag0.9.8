@@ -1,13 +1,9 @@
 /**
-  * @file EnigmaIOT-Json-Controller-Template.ino
+  * @file EnigmaIOT-DashButton-Controller.ino
   * @version 0.9.8
   * @date 15/07/2021
   * @author German Martin
   * @brief Node template for easy custom node creation
-  *
-  * Using this template you may create custom nodes in minutes by adding your code in a class.
-  * You only need to edit BasicController.h and BasicController.cpp with your code.
-  * All EnigmaIOT management is done internally
   */
 
 #if !defined ESP8266 && !defined ESP32
@@ -17,9 +13,7 @@
 #include <Arduino.h>
 #include <EnigmaIOTjsonController.h>
 #include <FailSafe.h>
-#include "CompostController.h" // <-- Include here your controller class header
-#include <OneWire.h>
-#include <DallasTemperature.h>
+#include "Puerta-Cochera.h" // <-- Include here your controller class header
 
 #include <EnigmaIOTNode.h>
 #include <espnow_hal.h>
@@ -34,7 +28,9 @@
 #include <Hash.h>
 #elif defined ESP32
 #include <WiFi.h>
+#include <SPIFFS.h>
 #include <AsyncTCP.h> // Comment to compile for ESP8266
+#include <SPIFFS.h>
 #include <Update.h>
 #include <driver/adc.h>
 #include "esp_wifi.h"
@@ -59,19 +55,16 @@
 
 EnigmaIOTjsonController* controller; // Generic controller is refferenced here. You do not need to modify it
 
-#define RESET_PIN 13 // (D7) You can set a different configuration reset pin here. Check for conflicts with used pins.
+#define RESET_PIN 13 // You can set a different configuration reset pin here. Check for conflicts with used pins.
 
-const time_t BOOT_FLAG_TIMEOUT = 10000; // Time in ms to reset flag
+const time_t BOOT_FLAG_TIMEOUT = 7000; // Time in ms to reset flag
 const int MAX_CONSECUTIVE_BOOT = 3; // Number of rapid boot cycles before enabling fail safe mode
 const int LED = LED_BUILTIN; // Number of rapid boot cycles before enabling fail safe mode
 const int FAILSAFE_RTC_ADDRESS = 0; // If you use RTC memory adjust offset to not overwrite other data
-#if SLEEPY
-const int SLEEP_TIME = 30; // Sleep time time in secons.
-#endif
 
 // Called when node is connected to gateway. You don't need to do anything here usually
 void connectEventHandler () {
-    controller->connectInform ();
+	controller->connectInform ();
 	DEBUG_WARN ("Connected");
 }
 
@@ -117,7 +110,7 @@ void setup () {
 	Serial.begin (115200); Serial.println (); Serial.printf ("enigmaiot_Cochera-vd.%d.%d.%d-Enigma-v%d.%d.%d",
                   PUERTA_MY_VERS[0], PUERTA_MY_VERS[1], PUERTA_MY_VERS[2], ENIGMAIOT_PROT_VERS[0], ENIGMAIOT_PROT_VERS[1], ENIGMAIOT_PROT_VERS[2]);
 	
-	Serial.println ("----Reset Pin D7----");
+	Serial.println ("----Pin Carro D5----");
 #endif
 
     FailSafe.checkBoot (MAX_CONSECUTIVE_BOOT, LED, FAILSAFE_RTC_ADDRESS); // Parameters are optional
@@ -134,20 +127,17 @@ void setup () {
 	EnigmaIOTNode.onDataRx (processRxData); // Configure incoming data handler
 	EnigmaIOTNode.enableClockSync (false); // Set to true if you need this node to get its clock syncronized with gateway
 	EnigmaIOTNode.onWiFiManagerStarted (wifiManagerStarted);
-    EnigmaIOTNode.onWiFiManagerExit (wifiManagerExit);
-#if !SLEEPY 
-    EnigmaIOTNode.enableBroadcast ();
-#endif
+	EnigmaIOTNode.onWiFiManagerExit (wifiManagerExit);
 
 	if (!controller->loadConfig ()) { // Trigger custom configuration loading
 		DEBUG_WARN ("Error reading config file");
 		if (FILESYSTEM.format ())
-			DEBUG_WARN ("Filesystem Formatted");
+			DEBUG_WARN ("SPIFFS Formatted");
 	}
 
-	EnigmaIOTNode.begin (&Espnow_hal, NULL, NULL, true, SLEEPY == 1); // Start EnigmaIOT communication
+    EnigmaIOTNode.begin (&Espnow_hal, NULL, NULL, true, SLEEPY == 1); // Start EnigmaIOT communication
 #if SLEEPY
-     EnigmaIOTNode.setSleepTime (SLEEP_TIME, false);
+    EnigmaIOTNode.setSleepTime (0, true);
 #endif
     
 	uint8_t macAddress[ENIGMAIOT_ADDR_LEN];
@@ -167,7 +157,7 @@ void setup () {
 	controller->sendDataCallback (sendUplinkData); // Listen for data from controller class
 	controller->setup (&EnigmaIOTNode);			   // Start controller class
 
-#if SLEEPY
+#if SLEEPY == 1
 	EnigmaIOTNode.sleep ();
 #endif
 
@@ -181,8 +171,8 @@ void loop () {
         return;
     }
 
-	controller->loop (); // Loop controller class
-#if SUPPORT_HA_DISCOVERY 
+    controller->loop (); // Loop controller class
+#if SUPPORT_HA_DISCOVERY    
     controller->callHAdiscoveryCalls (); // Send HA registration messages
 #endif // SUPPORT_HA_DISCOVERY 
     EnigmaIOTNode.handle (); // Mantain EnigmaIOT connection

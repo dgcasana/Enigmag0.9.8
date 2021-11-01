@@ -55,7 +55,7 @@ bool CONTROLLER_CLASS_NAME::sendTempHum (float temp, float tempe, float hum) {
 	json["TInt"] = temp;
     json["TExt"] = tempe;
 	json["hum"] = hum;
-    json["Batt"] = (float)(ESP.getVcc ()) / 1000;
+    json["batt"] = (float)(ESP.getVcc ()) / 1000;
 	
 
 	return sendJson (json);
@@ -287,6 +287,51 @@ void CONTROLLER_CLASS_NAME::buildHAAht10HumDiscovery () {
     haEntity->setExpireTime (3600);
     haEntity->setUnitOfMeasurement ("%");
     haEntity->setValueField ("hum");
+    //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
+
+    // *******************************
+
+    size_t bufferLen = haEntity->measureMessage ();
+
+    msgPackBuffer = (uint8_t*)malloc (bufferLen);
+
+    size_t len = haEntity->getAnounceMessage (bufferLen, msgPackBuffer);
+
+    DEBUG_INFO ("Resulting MSG pack length: %d", len);
+
+    if (!sendHADiscovery (msgPackBuffer, len)) {
+        DEBUG_WARN ("Error sending HA discovery message");
+    }
+
+    if (haEntity) {
+        delete (haEntity);
+    }
+
+    if (msgPackBuffer) {
+        free (msgPackBuffer);
+    }
+		
+}
+void CONTROLLER_CLASS_NAME::buildHABattDiscovery () {
+    // Select corresponding HAEntiny type
+    HASensor* haEntity = new HASensor ();
+	
+    uint8_t* msgPackBuffer;
+
+    if (!haEntity) {
+        DEBUG_WARN ("JSON object instance does not exist");
+        return;
+    }
+
+    // *******************************
+    // Add your characteristics here
+    // There is no need to futher modify this function
+
+    haEntity->setNameSufix ("Batt");
+    haEntity->setDeviceClass (sensor_battery);
+    haEntity->setExpireTime (3600);
+    haEntity->setUnitOfMeasurement ("v");
+    haEntity->setValueField ("batt");
     //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
 
     // *******************************
