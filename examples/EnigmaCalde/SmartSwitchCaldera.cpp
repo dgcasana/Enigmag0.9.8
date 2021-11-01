@@ -443,7 +443,7 @@ void CONTROLLER_CLASS_NAME::arranque(){
 	
 
 	if (tempPBaja - tempRetorno > 6) {
-		tParoVar = 60; // Si el suelo esta frio aumento la histeresis
+		tParoVar = config.tParo + 4; // Si el suelo esta frio aumento la histeresis
 		if(lastParoVar!=tParoVar){
 			json["tParoVar"]= tParoVar;
 			sendJson(json);
