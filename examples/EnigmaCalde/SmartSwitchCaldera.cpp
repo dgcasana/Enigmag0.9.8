@@ -18,6 +18,7 @@ const char* relayKey = "rly";
 const char* commandKey = "cmd";
 const char* statusKey = "status";
 const char* bypassKey = "bypass";
+const char* pelletKey = "enPellet";
 const char* infoKey = "info";
 const char* tParoKey = "tParo";
 const char* tArranqueKey = "tArranque";
@@ -37,7 +38,7 @@ DeviceAddress termPBaja     =  { 0x28, 0xFF, 0x34, 0xB6, 0x51, 0x17, 0x04, 0x78 
 DeviceAddress termPAlta     =  { 0x28, 0xFF, 0x95, 0x6C, 0x53, 0x17, 0x04, 0xD3 }; // {0x28, 0xCD, 0x22, 0x95, 0xF0, 0x01, 0x3C, 0x84}; //
 DeviceAddress termAcumula   =  { 0x28, 0xFF, 0xA8, 0xDE, 0x9E, 0x20, 0xD6, 0xC6 }; // {0x28, 0xDB, 0x69, 0x95, 0xF0, 0x01, 0x3C, 0xF4}; //
 
-bool /*bypass = true,*/ unaVez = true;
+bool unaVez = true;
 const size_t capacity = JSON_OBJECT_SIZE (5);
 
 int lastState = 0;//, tParo, tArran;
@@ -151,6 +152,20 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 				return false;
 			}
 
+			} else if (!strcmp (doc[commandKey], pelletKey)) {
+			if (!doc.containsKey (pelletKey)) {
+				DEBUG_WARN ("Wrong format");
+				return false;
+			}
+			DEBUG_WARN ("Set bypass status. Bypass = %s", doc[bypassKey].as<bool> () ? "enabled" : "disabled");
+
+			config.pelletCtl = doc[bypassKey].as<bool> ();
+
+			if (!sendBypassStatus ()) {
+				DEBUG_WARN ("Error sending link status");
+				return false;
+			}
+
 		}else if (!strcmp (doc[commandKey], tParoKey)) {
 			if (!doc.containsKey (tParoKey)) {
 				DEBUG_WARN ("Wrong format");
@@ -215,7 +230,7 @@ bool CONTROLLER_CLASS_NAME::sendInfoCommnads () {
 	DynamicJsonDocument json (capacity);
 	
 	json["get"] = "rly,bypass,status";
-    json["set"] = "rly,bypass,tParo,tArranque";
+    json["set"] = "rly,bypass,tParo,tArranque,enPellet";
 	return sendJson (json);
 }
 
@@ -387,8 +402,10 @@ void CONTROLLER_CLASS_NAME::userCode(){
 			Serial.print("Ping: ");
 			Serial.print(sonar.ping_cm()); // Send ping, get distance in cm and print result (0 = outside set distance range)
 			Serial.println("cm");
-			sonar.ping_cm();
+			
 		}
+
+		distancia= sonar.ping_cm();
 
 		if((distancia>3)&&(distancia<120)){
 			Serial.println("Medida correcta,envia");
@@ -418,7 +435,7 @@ void CONTROLLER_CLASS_NAME::userCode(){
 
 void CONTROLLER_CLASS_NAME::arranque(){
 	int tParoVar;
-	
+	static int lastParoVar = config.tParo;
 
 	const size_t capacity = JSON_OBJECT_SIZE (2);
 	DynamicJsonDocument json (capacity);
@@ -427,16 +444,23 @@ void CONTROLLER_CLASS_NAME::arranque(){
 
 	if (tempPBaja - tempRetorno > 6) {
 		tParoVar = 60; // Si el suelo esta frio aumento la histeresis
-		json["tParoVar"]= tParoVar;
-		sendJson(json);
+		if(lastParoVar!=tParoVar){
+			json["tParoVar"]= tParoVar;
+			sendJson(json);
+			lastParoVar = tParoVar;
+		}
 	}
 	else {
 		tParoVar = config.tParo;
-		json["tParoVar"]= tParoVar;
-		sendJson(json);
+		if(lastParoVar!=tParoVar){
+			json["tParoVar"]= tParoVar;
+			sendJson(json);
+			lastParoVar = tParoVar;
+		}
 	}
 	
-	if ((0 < tempAcumula < config.tArranq) && (nivelPellets > 35)){
+	
+	if (((0 < tempAcumula)&&(tempAcumula < config.tArranq)) && ((nivelPellets > 20) || !config.pelletCtl)){  // config.pelletCtl deshabilita el control nivelPellets
 		termosta = HIGH;
 		if (config.bypass && perTempo && !lastState){
 			setRelay(HIGH);
@@ -531,6 +555,7 @@ void CONTROLLER_CLASS_NAME::defaultConfig () {
 	
 	//config.relayPin = RELAY_PIN;
 	config.bypass = true;
+	config.pelletCtl = true;
 	config.ON_STATE = ON;
 	config.bootStatus = SAVE_RELAY_STATUS;
 	config.bypassStatus = SAVE_RELAY_STATUS;
@@ -596,6 +621,9 @@ bool CONTROLLER_CLASS_NAME::loadConfig () {
 			if (doc.containsKey ("bypass")) {
 				config.bypass = doc["bypass"].as<bool> ();
 			}
+			if (doc.containsKey ("pelletCtl")) {
+				config.pelletCtl = doc["pelletCtl"].as<bool> ();
+			}
 
 			configFile.close ();
 			if (json_correct) {
@@ -651,6 +679,7 @@ bool CONTROLLER_CLASS_NAME::saveConfig () {
 	config.bypassStatus = SAVE_RELAY_STATUS;*/
 
 	doc["bypass"] = config.bypass;
+	doc["pelletCtl"] = config.pelletCtl;
 	doc["ON_STATE"] = config.ON_STATE;
 	doc["relayStatus"] = config.relayStatus;
 	int bootStatus = config.bootStatus;
@@ -676,7 +705,7 @@ bool CONTROLLER_CLASS_NAME::saveConfig () {
 	free (output);
 
 	configFile.flush ();
-	size_t size = configFile.size ();
+	//size_t size = configFile.size ();
 
 	//configFile.write ((uint8_t*)(&mqttgw_config), sizeof (mqttgw_config));
 	configFile.close ();

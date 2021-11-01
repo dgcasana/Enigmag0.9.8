@@ -57,6 +57,7 @@ struct smartSwitchControllerHw_t {
 	//int relayPin;
 	bool relayStatus;
 	bool bypass;
+    bool pelletCtl;
 	bootRelayStatus_t bootStatus;
     bootRelayStatus_t bypassStatus;
 	int tParo;
