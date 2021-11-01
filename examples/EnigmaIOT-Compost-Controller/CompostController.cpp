@@ -22,7 +22,11 @@ constexpr auto CONFIG_FILE = "/customconf.json"; ///< @brief Custom configuratio
 OneWire* oneWire;
 
 uint8_t readStatus = 0;
-AHT10 myAHT10(AHT10_ADDRESS_0X38);
+
+HTU21D            myHTU21D(HTU21D_RES_RH12_TEMP14);
+
+
+ADC_MODE (ADC_VCC);
 
 
 bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint8_t* buffer, uint8_t length, nodeMessageType_t command, nodePayloadEncoding_t payloadEncoding) {
@@ -46,11 +50,12 @@ bool CONTROLLER_CLASS_NAME::sendCommandResp (const char* command, bool result) {
 }*/
 
 bool CONTROLLER_CLASS_NAME::sendTempHum (float temp, float tempe, float hum) {
-	const size_t capacity = JSON_OBJECT_SIZE (3);
+	const size_t capacity = JSON_OBJECT_SIZE (4);
 	DynamicJsonDocument json (capacity);
 	json["TInt"] = temp;
     json["TExt"] = tempe;
 	json["hum"] = hum;
+    json["Batt"] = (float)(ESP.getVcc ()) / 1000;
 	
 
 	return sendJson (json);
@@ -81,7 +86,7 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 	sensors->setWaitForConversion (false);
 	sensors->requestTemperatures ();
 #endif
-	myAHT10.begin(); // default SDA & SCL pin (D2,D1)
+	myHTU21D.begin(); // default SDA & SCL pin (D2,D1)
     time_t start = millis ();
 
     // Send a 'hello' message when initalizing is finished
@@ -100,15 +105,19 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 #else
     tempC = 25.8;
 #endif
-	humidity    = myAHT10.readHumidity();
-	temperature = myAHT10.readTemperature();
+	
+    humidity    = myHTU21D.readCompensatedHumidity();
+    temperature = myHTU21D.readTemperature();
     
     // Send a 'hello' message when initalizing is finished
     //sendStartAnouncement ();
 
 	DEBUG_DBG ("Finish begin");
 
+      
+
 	// If your node should sleep after sending data do all remaining tasks here
+    
 }
 
 void CONTROLLER_CLASS_NAME::loop () {
@@ -117,7 +126,7 @@ void CONTROLLER_CLASS_NAME::loop () {
 
 	// You can send your data as JSON. This is a basic example
 
-    if (!tempSent && enigmaIotNode->isRegistered()) {
+       if (!tempSent && enigmaIotNode->isRegistered()) {
         /*if (sendTemperature (tempC)) {
             tempSent = true;
         }*/
@@ -127,6 +136,9 @@ void CONTROLLER_CLASS_NAME::loop () {
         // else {
         //}
     }
+
+    
+
     
         //const size_t capacity = JSON_OBJECT_SIZE (4);
 		//DynamicJsonDocument json (capacity);

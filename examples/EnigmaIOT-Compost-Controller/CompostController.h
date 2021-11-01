@@ -26,7 +26,7 @@ static const char* CONTROLLER_NAME = "Compost controller";
 // You may define data structures and constants here
 // --------------------------------------------------
 #include <DallasTemperature.h>
-#include <AHT10.h>
+#include <HTU21D.h>
 #include <Wire.h>
 
 class CONTROLLER_CLASS_NAME : EnigmaIOTjsonController {
