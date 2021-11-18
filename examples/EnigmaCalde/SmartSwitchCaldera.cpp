@@ -426,7 +426,7 @@ void CONTROLLER_CLASS_NAME::userCode(){
 		Serial.printf ("Nivel pellets: %f\n", nivelPellets);
 		}
 		json["Pellets"] = nivelPellets;
-		json["termostato"] = termosta ? "ON" : "OFF";
+		json["termostato"] = termosta ? 1 : 0;  //influxdb no reconoce on/off
 
 		
 		sendJson(json);
@@ -960,8 +960,8 @@ void CONTROLLER_CLASS_NAME::buildHACalderaDiscovery () {
     haBEntity->setNameSufix ("Caldera");
 	haBEntity->setDeviceClass (bs_heat);
     haBEntity->addExpiration (3600);
-	haBEntity->setPayloadOff ("OFF");
-    haBEntity->setPayloadOn ("ON");
+	haBEntity->setPayloadOff ("0");
+    haBEntity->setPayloadOn ("1");
     haBEntity->setValueField ("rly");  // nombre del json del valor a capurar 
     //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
 
