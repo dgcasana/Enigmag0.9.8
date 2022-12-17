@@ -62,6 +62,7 @@ struct smartSwitchControllerHw_t {
     bootRelayStatus_t bypassStatus;
 	int tParo;
     int tArranq;
+    int tMin;
 	int ON_STATE;
 	//int BY_STATE;
 };

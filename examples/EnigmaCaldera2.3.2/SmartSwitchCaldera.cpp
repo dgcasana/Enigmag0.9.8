@@ -186,7 +186,7 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 			setArran(doc[tArranqueKey].as<int> ());
 
 			//tArran = (doc[tArranqueKey].as<int> ());
-		}
+		
 		}else if (!strcmp (doc[commandKey], tMinimaKey)) {
 			if (!doc.containsKey (tMinimaKey)) {
 				DEBUG_WARN ("Wrong format");
@@ -232,7 +232,7 @@ bool CONTROLLER_CLASS_NAME::sendNodeStatus () {
 	json[relayKey] = config.relayStatus ? 1 : 0;
 	json["tParo"] = config.tParo;
 	json["tArranque"] = config.tArranq;
-	json["tMinima"] = config.Min;
+	json["tMinima"] = config.tMin;
 	json["PerTempo"] = perTempo ? "Si" : "No";
 	return sendJson (json);
 }
@@ -639,8 +639,8 @@ bool CONTROLLER_CLASS_NAME::loadConfig () {
 				}
 				config.tArranq = doc["tArranq"].as<int> ();
 				config.tParo = doc["tParo"].as<int> ();
-				
-
+			}
+			
 			if (doc.containsKey ("tMin")) {
 				config.tMin = doc["tMin"].as<int> ();
 			}
@@ -687,7 +687,7 @@ bool CONTROLLER_CLASS_NAME::loadConfig () {
 	return json_correct;
 }
 
-bool CONTROLLER_CLASS_NAME::saveConfig () {
+bool CONTROLLER_CLASS_NAME::saveConfig() {
 	// If you need to save custom configuration data do it here
 	if (!FILESYSTEM.begin ()) {
 		DEBUG_WARN ("Error opening filesystem");
