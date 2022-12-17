@@ -639,6 +639,9 @@ bool CONTROLLER_CLASS_NAME::loadConfig () {
 				}
 				config.tArranq = doc["tArranq"].as<int> ();
 				config.tParo = doc["tParo"].as<int> ();
+				
+
+			if (doc.containsKey ("tMin")) {
 				config.tMin = doc["tMin"].as<int> ();
 			}
 
