@@ -516,6 +516,12 @@ void CONTROLLER_CLASS_NAME::arranque(){
 		Serial.println("Arranque permitido por tiempo");
 	}
 
+	if (tempAcumula < 38){
+		perTempo = HIGH;
+		setBypass(1);
+		Serial.println("Arranque activado por baja temp. acumulador");
+	}
+
 }
 
 
