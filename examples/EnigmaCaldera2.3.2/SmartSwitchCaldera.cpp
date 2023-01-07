@@ -153,16 +153,16 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 				return false;
 			}
 
-			} else if (!strcmp (doc[commandKey], pelletKey)) {
+		} else if (!strcmp (doc[commandKey], pelletKey)) {
 			if (!doc.containsKey (pelletKey)) {
 				DEBUG_WARN ("Wrong format");
 				return false;
 			}
-			DEBUG_WARN ("Set bypass status. Bypass = %s", doc[bypassKey].as<bool> () ? "enabled" : "disabled");
+			DEBUG_WARN ("Set bypass status. Bypass = %s", doc[pelletKey].as<bool> () ? "enabled" : "disabled");
 
-			config.pelletCtl = doc[bypassKey].as<bool> ();
+			config.pelletCtl = doc[pelletKey].as<bool> ();
 
-			if (!sendBypassStatus ()) {
+			if (!sendPelletStatus ()) {
 				DEBUG_WARN ("Error sending link status");
 				return false;
 			}
@@ -223,12 +223,23 @@ bool CONTROLLER_CLASS_NAME::sendBypassStatus () {
 	return sendJson (json);
 }
 
+bool CONTROLLER_CLASS_NAME::sendPelletStatus () {
+	const size_t capacity = JSON_OBJECT_SIZE (2);
+	DynamicJsonDocument json (capacity);
+
+	json[commandKey] = pelletKey;
+    json[pelletKey] = config.pelletCtl ? 1 : 0;
+
+	return sendJson (json);
+}
+
 bool CONTROLLER_CLASS_NAME::sendNodeStatus () {
-	const size_t capacity = JSON_OBJECT_SIZE (6);
+	const size_t capacity = JSON_OBJECT_SIZE (9);
 	DynamicJsonDocument json (capacity);
 
 	json["lastState"] = lastState;
     json[bypassKey] = config.bypass ? 1 : 0;
+	json[pelletKey] = config.pelletCtl ? 1 : 0;
 	json[relayKey] = config.relayStatus ? 1 : 0;
 	json["tParo"] = config.tParo;
 	json["tArranque"] = config.tArranq;
