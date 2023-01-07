@@ -153,6 +153,10 @@ protected:
         snprintf (version_buf, 14, "%d.%d.%d-%d.%d.%d",
                   CALDERA_MY_VERS[0], CALDERA_MY_VERS[1], CALDERA_MY_VERS[2], ENIGMAIOT_PROT_VERS[0], ENIGMAIOT_PROT_VERS[1], ENIGMAIOT_PROT_VERS[2]);
         json["version"] = String (version_buf);
+        json["tArranque"] = config.tArranq;
+        json["tParo"] = config.tParo;
+        json["tMinima"] = config.tMin;
+        json["enPellet"] = config.pelletCtl;
 
         return sendJson (json);
     }
