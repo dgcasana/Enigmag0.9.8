@@ -23,6 +23,9 @@ const char* infoKey = "info";
 const char* tParoKey = "tParo";
 const char* tArranqueKey = "tArranque";
 const char* tMinimaKey = "tMinima";
+const char* pbajaKey = "pbaja";
+const char* paltaKey = "palta";
+
 
 const time_t START_PERIOD = 7200000;  // 2 horas
 
@@ -196,6 +199,34 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 			setMin(doc[tMinimaKey].as<int> ());
 
 			//tArran = (doc[tArranqueKey].as<int> ());
+		} else if (!strcmp (doc[commandKey], pbajaKey)) {
+			if (!doc.containsKey (pbajaKey)) {
+				DEBUG_WARN ("Wrong format");
+				return false;
+			}
+			DEBUG_WARN ("Set pabaja status. Bypass = %s", doc[pbajaKey].as<bool> () ? "enabled" : "disabled");
+
+			setPbaja (doc[pbajaKey].as<bool> ());
+
+			if (!sendPbajaStatus ()) {
+				DEBUG_WARN ("Error sending link status");
+				return false;
+			}
+
+		} else if (!strcmp (doc[commandKey], paltaKey)) {
+			if (!doc.containsKey (paltaKey)) {
+				DEBUG_WARN ("Wrong format");
+				return false;
+			}
+			DEBUG_WARN ("Set palta status. Bypass = %s", doc[paltaKey].as<bool> () ? "enabled" : "disabled");
+
+			setPalta (doc[paltaKey].as<bool> ());
+
+			if (!sendPaltaStatus ()) {
+				DEBUG_WARN ("Error sending link status");
+				return false;
+			}
+
 		}
 	}
 
@@ -284,6 +315,8 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
     // You do node setup here. Use it as it was the normal setup() Arduino function
 
 	pinMode (RELAY_PIN, OUTPUT);
+	pinMode (PBAJA_PIN, OUTPUT);
+	pinMode (PALTA_PIN, OUTPUT);
 	sensors.begin();
 	sensors.setResolution(termRetorno, 10);
 	sensors.setResolution(termPBaja, 10);
@@ -297,6 +330,8 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 	DEBUG_WARN ("Relay status set to %s", config.relayStatus ? "ON" : "OFF");
 	
 	setRelay(config.relayStatus);
+	setPalta(config.palta);
+	setPbaja(config.pbaja);
 
 	//tArran = config.tArranq;
 	//tParo = config.tParo;
@@ -306,6 +341,18 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 		DEBUG_WARN ("Bypass status set to Bypass Status %d -> %d", config.bypassStatus, config.bypass);
 	}
 	DEBUG_WARN ("Bypass status set to %s", config.bypass ? "ON" : "OFF");
+
+	if (config.pbajaStatus != SAVE_RELAY_STATUS) {
+		config.pbaja = (bool)config.pbajaStatus;
+		DEBUG_WARN ("pbaja status set to pbaja Status %d -> %d", config.pbajaStatus, config.bypass);
+	}
+	DEBUG_WARN ("pbaja status set to %s", config.pbaja ? "ON" : "OFF");
+
+	if (config.paltaStatus != SAVE_RELAY_STATUS) {
+		config.palta = (bool)config.paltaStatus;
+		DEBUG_WARN ("palta status set to palta Status %d -> %d", config.paltaStatus, config.bypass);
+	}
+	DEBUG_WARN ("palta status set to %s", config.palta ? "ON" : "OFF");
 
     /// Send a 'hello' message when initalizing is finished
     if (!(enigmaIotNode->getNode ()->getSleepy ())) {
@@ -351,6 +398,37 @@ void CONTROLLER_CLASS_NAME::setBypass (bool state) {
 	} else {
 		DEBUG_ERROR ("Error saving config");
 	}
+}
+
+void CONTROLLER_CLASS_NAME::setPbaja (bool state) {
+	DEBUG_WARN ("Set pbaja %s", state ? "ON" : "OFF");
+	config.pbaja = state;
+	digitalWrite (PBAJA_PIN, config.pbaja ? ON : OFF);
+
+	if (config.pbajaStatus == SAVE_RELAY_STATUS) {
+		if (saveConfig ()) {
+			DEBUG_WARN ("Config updated. Relay is %s", config.pbaja ? "ON" : "OFF");
+		} else {
+			DEBUG_ERROR ("Error saving config");
+		}
+	}
+
+}
+
+void CONTROLLER_CLASS_NAME::setPalta (bool state) {
+	DEBUG_WARN ("Set palta %s", state ? "ON" : "OFF");
+	config.palta = state;
+	digitalWrite (PALTA_PIN, config.palta ? ON : OFF);
+
+	if (config.paltaStatus == SAVE_RELAY_STATUS) {
+		if (saveConfig ()) {
+			DEBUG_WARN ("Config updated. Relay is %s", config.palta ? "ON" : "OFF");
+		} else {
+			DEBUG_ERROR ("Error saving config");
+		}
+	}
+	
+
 }
 
 void CONTROLLER_CLASS_NAME::setParo (int temp) {
@@ -420,10 +498,10 @@ void CONTROLLER_CLASS_NAME::userCode(){
 		msg.addTemperature (9, tempPBaja);
 		msg.addTemperature (10, tempPAlta);*/
 		
-		if (0 < tempRetorno) json["Retorno"] = tempRetorno;  // evitamos temp -127
-		if (0 < tempPBaja) json["PBaja"] = tempPBaja;
-		if (0 < tempPAlta) json["PAlta"] = tempPAlta;
-		if (0 < tempAcumula) json["Acumula"] = tempAcumula;
+		json["Retorno"] = tempRetorno;
+		json["PBaja"] = tempPBaja;
+		json["PAlta"] = tempPAlta;
+		json["Acumula"] = tempAcumula;
 
 		//sendJson (json);
 				
@@ -579,9 +657,13 @@ void CONTROLLER_CLASS_NAME::configManagerExit (bool status) {
 		config.ON_STATE = ON;
 		config.bootStatus = SAVE_RELAY_STATUS;
 		config.bypassStatus = SAVE_RELAY_STATUS;
+		config.paltaStatus = SAVE_RELAY_STATUS;
+		config.pbajaStatus = SAVE_RELAY_STATUS;
 		config.tArranq = 48;
 		config.tParo = 57;
-		config.tMin = 39;		
+		config.tMin = 39;
+		config.palta = OFF;
+		config.pbaja = OFF;
 		
 		if (!saveConfig ()) {
 			DEBUG_ERROR ("Error writting blind controller config to filesystem.");
@@ -601,9 +683,13 @@ void CONTROLLER_CLASS_NAME::defaultConfig () {
 	config.ON_STATE = ON;
 	config.bootStatus = SAVE_RELAY_STATUS;
 	config.bypassStatus = SAVE_RELAY_STATUS;
+	config.pbajaStatus = SAVE_RELAY_STATUS;
+	config.paltaStatus = SAVE_RELAY_STATUS;
 	config.tArranq = 48;
 	config.tParo = 57;
 	config.tMin = 39;
+	config.pbaja = OFF;
+	config.palta = OFF;
 
 }
 
@@ -654,10 +740,40 @@ bool CONTROLLER_CLASS_NAME::loadConfig () {
 				} else {
 					config.bypassStatus = RELAY_OFF;
 				}
+				
+			}
+			if (doc.containsKey ("pbaja") &&
+				doc.containsKey ("palta") &&
+				doc.containsKey ("pbajaStatus") &&
+				doc.containsKey ("paltaStatus")) {
+
+				json_correct = true;
+				//config.bypass = doc["linked"].as<bool> ();
+				int pbajaStatus = doc["pbajaStatus"].as<int> ();
+				int paltaStatus = doc["paltaStatus"].as<int> ();
+				if (pbajaStatus >= RELAY_OFF && pbajaStatus <= SAVE_RELAY_STATUS) {
+					config.pbajaStatus = (bootRelayStatus_t)pbajaStatus;
+					DEBUG_WARN ("planta baja status set to %d", config.pbajaStatus);
+				} else {
+					config.pbajaStatus = RELAY_OFF;
+				}
+				if (paltaStatus >= RELAY_OFF && paltaStatus <= SAVE_RELAY_STATUS) {
+					config.paltaStatus = (bootRelayStatus_t)paltaStatus;
+					DEBUG_WARN ("planta alta status set to %d", config.paltaStatus);
+				} else {
+					config.paltaStatus = RELAY_OFF;
+				}
+				
+				
+			}
+			if (doc.containsKey ("tArranq")) {
 				config.tArranq = doc["tArranq"].as<int> ();
+			}
+
+			if (doc.containsKey ("tParo")) {
 				config.tParo = doc["tParo"].as<int> ();
 			}
-			
+
 			if (doc.containsKey ("tMin")) {
 				config.tMin = doc["tMin"].as<int> ();
 			}
@@ -732,10 +848,17 @@ bool CONTROLLER_CLASS_NAME::saveConfig() {
 	int bootStatus = config.bootStatus;
 	doc["bootStatus"] = bootStatus;
 	int bypassStatus = config.bypassStatus;
-	doc["bypassStatus"] = bypassStatus;
+	doc["bootStatus"] = bootStatus;
+	int pbajaStatus = config.pbajaStatus;
+	doc["pbajaStatus"] = pbajaStatus;
+	int paltaStatus = config.paltaStatus;
+	doc["paltaStatus"] = paltaStatus;
 	doc["tArranq"] = config.tArranq;
 	doc["tParo"] = config.tParo;
 	doc["tMin"] = config.tMin;
+	doc["palta"] = config.palta;
+	doc["pbaja"] = config.pbaja;
+
 
 	if (serializeJson (doc, configFile) == 0) {
 		DEBUG_ERROR ("Failed to write to file");

@@ -44,7 +44,7 @@ static const char* CONTROLLER_NAME = "Caldera controller";
 #define ON HIGH
 #define OFF !ON
 
-static const uint8_t CALDERA_MY_VERS[3] = { 2,3,2 }; ///< @brief Caldera Version
+static const uint8_t CALDERA_MY_VERS[3] = { 2,4,2 }; ///< @brief Caldera Version
 
 typedef enum {
 	RELAY_OFF = 0,
@@ -53,13 +53,18 @@ typedef enum {
 } bootRelayStatus_t;
 
 
+
 struct smartSwitchControllerHw_t {
 	//int relayPin;
 	bool relayStatus;
+    bool pbaja;
+    bool palta;
 	bool bypass;
     bool pelletCtl;
 	bootRelayStatus_t bootStatus;
     bootRelayStatus_t bypassStatus;
+    bootRelayStatus_t pbajaStatus;
+    bootRelayStatus_t paltaStatus;
 	int tParo;
     int tArranq;
     int tMin;
@@ -182,6 +187,14 @@ protected:
     void setRelay (bool state);
 
 	bool sendRelayStatus ();
+
+    void setPalta (bool state);
+
+	bool sendPaltaStatus ();
+
+    void setPbaja (bool state);
+
+	bool sendPbajaStatus ();
 
     void setBypass (bool state);
 
