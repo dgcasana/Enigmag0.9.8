@@ -409,10 +409,10 @@ void CONTROLLER_CLASS_NAME::userCode(){
 		msg.addTemperature (9, tempPBaja);
 		msg.addTemperature (10, tempPAlta);*/
 		
-		json["Retorno"] = tempRetorno;
-		json["PBaja"] = tempPBaja;
-		json["PAlta"] = tempPAlta;
-		json["Acumula"] = tempAcumula;
+		if (0 < tempRetorno) json["Retorno"] = tempRetorno;  // evitamos temp -127
+		if (0 < tempPBaja) json["PBaja"] = tempPBaja;
+		if (0 < tempPAlta) json["PAlta"] = tempPAlta;
+		if (0 < tempAcumula) json["Acumula"] = tempAcumula;
 
 		//sendJson (json);
 				
