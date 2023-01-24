@@ -30,8 +30,8 @@ static const char* CONTROLLER_NAME = "Puerta Cochera";
 // --------------------------------------------------
 #define DEFAULT_BUTTON_PIN 0
 #define DEFAULT_RELAY_PIN 5  //D1 pin tipico del relay shield
-#define DEFAULT_OPEN_PIN 14  //D5
-#define DEFAULT_CLOSE_PIN 12  //D6
+#define DEFAULT_OPEN_PIN 12  //D6
+#define DEFAULT_CLOSE_PIN 14  //D5
 #define ON HIGH
 #define OFF !ON
 

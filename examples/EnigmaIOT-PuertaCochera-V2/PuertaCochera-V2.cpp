@@ -21,7 +21,7 @@ const char* openedKey = "open";
 const char* linkKey = "link";
 const char* bootStateKey = "bstate";
 
-bool doorOpened, doorNotOpened, doorClosed, doorNotClosed;
+static bool doorOpened, doorNotOpened = true, doorClosed, doorNotClosed = true;
 
 static clock_t lastActiveStatus;
 
@@ -249,7 +249,7 @@ void CONTROLLER_CLASS_NAME::loop () {
 		const size_t capacity = JSON_OBJECT_SIZE (2);
 		DynamicJsonDocument json (capacity);
 		json["sensor"] = config.closedPin;
-		json["close"] = 0;
+		json["close"] = 1;
 		if (sendJson (json)) {
 			DEBUG_INFO ("Closed door sent");
 		} else {
@@ -263,11 +263,11 @@ void CONTROLLER_CLASS_NAME::loop () {
 	if (!doorNotClosed) {
 		if (digitalRead (config.closedPin)) { // If button is released
 			DEBUG_INFO ("close released");
-			doorOpened = true;
+			doorNotClosed = true;
 			const size_t capacity = JSON_OBJECT_SIZE (2);
 			DynamicJsonDocument json (capacity);
 			json["sensor"] = config.closedPin;
-			json["close"] = 1;
+			json["close"] = 0;
 			if (sendJson (json)) {
 				DEBUG_INFO ("Opened door sent");
 			} else {
@@ -292,7 +292,7 @@ void CONTROLLER_CLASS_NAME::loop () {
 		const size_t capacity = JSON_OBJECT_SIZE (2);
 		DynamicJsonDocument json (capacity);
 		json["sensor"] = config.openedPin;
-		json["open"] = 0;
+		json["open"] = 1;
 		if (sendJson (json)) {
 			DEBUG_INFO ("Opened door sent");
 		} else {
@@ -306,11 +306,11 @@ void CONTROLLER_CLASS_NAME::loop () {
 	if (!doorNotOpened) {
 		if (digitalRead (config.openedPin)) { // If button is released
 			DEBUG_INFO ("Open released");
-			doorOpened = true;
+			doorNotOpened = true;
 			const size_t capacity = JSON_OBJECT_SIZE (2);
 			DynamicJsonDocument json (capacity);
 			json[openedKey] = config.openedPin;
-			json["open"] = 1;
+			json["open"] = 0;
 			if (sendJson (json)) {
 				DEBUG_INFO ("Opened door sent");
 			} else {
@@ -330,13 +330,13 @@ void CONTROLLER_CLASS_NAME::loop () {
 
 	}
 
-    static clock_t lastSentStatus;
+    /*static clock_t lastSentStatus;
     static clock_t sendStatusPeriod = 2000;
     if (enigmaIotNode->isRegistered () && millis () - lastSentStatus > sendStatusPeriod) {
         lastSentStatus = millis ();
         sendStatusPeriod = 300000;
         sendRelayStatus ();
-    }
+    }*/
 }
 
 CONTROLLER_CLASS_NAME::~CONTROLLER_CLASS_NAME () {
@@ -357,11 +357,11 @@ void CONTROLLER_CLASS_NAME::configManagerStart () {
 	static char closedPinParamStr[4];
 	itoa (DEFAULT_CLOSE_PIN, closedPinParamStr, 10);
 	static char openedPinParamStr[4];
-	itoa (DEFAULT_CLOSE_PIN, openedPinParamStr, 10);
+	itoa (DEFAULT_OPEN_PIN, openedPinParamStr, 10);
 	static char relayPinParamStr[4];
 	itoa (DEFAULT_RELAY_PIN, relayPinParamStr, 10);
-	closedPinParam = new AsyncWiFiManagerParameter ("closePin", "Sensor Pin", closedPinParamStr, 3, "required type=\"text\" pattern=\"^1[2-5]$|^[0-5]$\"");
-	openedPinParam = new AsyncWiFiManagerParameter ("openPin", "Sensor Pin", openedPinParamStr, 3, "required type=\"text\" pattern=\"^1[2-5]$|^[0-5]$\"");
+	closedPinParam = new AsyncWiFiManagerParameter ("closePin", "Close Pin", closedPinParamStr, 3, "required type=\"text\" pattern=\"^1[2-5]$|^[0-5]$\"");
+	openedPinParam = new AsyncWiFiManagerParameter ("openPin", "Open Pin", openedPinParamStr, 3, "required type=\"text\" pattern=\"^1[2-5]$|^[0-5]$\"");
 	relayPinParam = new AsyncWiFiManagerParameter ("relayPin", "Relay Pin", relayPinParamStr, 3, "required type=\"text\" pattern=\"^1[2-5]$|^[0-5]$\"");
 	//bootStatusParam = new AsyncWiFiManagerParameter ("bootStatus", "Boot Relay Status", "", 6, "required type=\"text\" list=\"bootStatusList\" pattern=\"^ON$|^OFF$|^SAVE$\"");
 	/*bootStatusListParam = new AsyncWiFiManagerParameter ("<datalist id=\"bootStatusList\">" \
@@ -666,8 +666,8 @@ void CONTROLLER_CLASS_NAME::buildHABinarySensorDiscovery () {
     haEntity->setNameSufix ("p_cochera");
     haEntity->setDeviceClass (bs_garage_door);
     //haEntity->setSubtype (turn_on);
-    haEntity->setPayloadOn ("{\"sensor\":14,\"close\":1}");
-	haEntity->setPayloadOff ("{\"sensor\":12,\"open\":1}");
+    haEntity->setPayloadOn ("{\"sensor\":14,\"open\":1}");
+	haEntity->setPayloadOff ("{\"sensor\":12,\"close\":1}");
     // *******************************
 
     size_t bufferLen = haEntity->measureMessage ();
