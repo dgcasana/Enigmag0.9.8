@@ -22,13 +22,16 @@ static const char* CONTROLLER_NAME = "Puerta Cochera";
 #if SUPPORT_HA_DISCOVERY    
 #include <haTrigger.h>
 #include <haSwitch.h>
+#include <haBinarySensor.h>
 #endif
 
 // --------------------------------------------------
 // You may define data structures and constants here
 // --------------------------------------------------
 #define DEFAULT_BUTTON_PIN 0
-#define DEFAULT_RELAY_PIN 12
+#define DEFAULT_RELAY_PIN 5  //D1 pin tipico del relay shield
+#define DEFAULT_OPEN_PIN 14  //D5
+#define DEFAULT_CLOSE_PIN 12  //D6
 #define ON HIGH
 #define OFF !ON
 
@@ -41,7 +44,8 @@ typedef enum {
 struct smartSwitchControllerHw_t {
 	int relayPin;
 	bool relayStatus;
-	uint8_t sensorPin;
+	uint8_t closedPin;
+	uint8_t openedPin;
 	//bool linked;
 	//bootRelayStatus_t bootStatus;
 	int ON_STATE;
@@ -55,10 +59,10 @@ protected:
 	bool pushTriggered = false;
 	bool pushReleased = true;
 	smartSwitchControllerHw_t config;
-	AsyncWiFiManagerParameter* sensorPinParam;
+	AsyncWiFiManagerParameter* closedPinParam;
+	AsyncWiFiManagerParameter* openedPinParam;
 	AsyncWiFiManagerParameter* relayPinParam;
-	AsyncWiFiManagerParameter* bootStatusParam;
-	AsyncWiFiManagerParameter* bootStatusListParam;
+	
 
 public:
 	void setup (EnigmaIOTNodeClass* node, void* data = NULL);
@@ -125,7 +129,7 @@ protected:
 	// ------------------------------------------------------------
 	void defaultConfig ();
 
-	void toggleRelay ();
+	//void toggleRelay ();
 
 	void setRelay (bool state);
 

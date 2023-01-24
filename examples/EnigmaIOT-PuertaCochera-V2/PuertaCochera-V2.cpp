@@ -16,9 +16,14 @@ constexpr auto CONFIG_FILE = "/customconf.json"; ///< @brief Custom configuratio
 // -----------------------------------------
 const char* relayKey = "rly";
 const char* commandKey = "cmd";
-const char* sensorKey = "sensor";
+const char* closedKey = "close";
+const char* openedKey = "open";
 const char* linkKey = "link";
 const char* bootStateKey = "bstate";
+
+bool doorOpened, doorNotOpened, doorClosed, doorNotClosed;
+
+static clock_t lastActiveStatus;
 
 bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint8_t* buffer, uint8_t length, nodeMessageType_t command, nodePayloadEncoding_t payloadEncoding) {
 	// Process incoming messages here
@@ -108,12 +113,9 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 			}
 			DEBUG_WARN ("Set link status. Link = %s", doc[linkKey].as<bool> () ? "enabled" : "disabled");
 
-			setLinked (doc[linkKey].as<bool> ());
+			//setLinked (doc[linkKey].as<bool> ());
 
-			if (!sendLinkStatus ()) {
-				DEBUG_WARN ("Error sending link status");
-				return false;
-			}
+			
 
 		} else if (!strcmp (doc[commandKey], bootStateKey)) {
 			if (!doc.containsKey (bootStateKey)) {
@@ -122,12 +124,9 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 			}
 			DEBUG_WARN ("Set boot status. Link = %d", doc[bootStateKey].as<int> ());
 
-			setBoot (doc[bootStateKey].as<int> ());
+			//setBoot (doc[bootStateKey].as<int> ());
 
-			if (!sendBootStatus ()) {
-				DEBUG_WARN ("Error sending boot status configuration");
-				return false;
-			}
+			
 
 		}
 	}
@@ -178,8 +177,8 @@ void CONTROLLER_CLASS_NAME::connectInform () {
 #if SUPPORT_HA_DISCOVERY    
     // Register every HAEntity discovery function here. As many as you need
     addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHASwitchDiscovery, this));
-    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHATriggerDiscovery, this));
-    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHALinkDiscovery, this));
+    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHABinarySensorDiscovery, this));
+    //addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHALinkDiscovery, this));
 #endif
 
     EnigmaIOTjsonController::connectInform ();
@@ -189,15 +188,13 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 	enigmaIotNode = node;
 
 	// You do node setup here. Use it as it was the normal setup() Arduino function
-	pinMode (config.sensorPin, INPUT_PULLUP);
+	pinMode (config.closedPin, INPUT_PULLUP);
+	pinMode (config.openedPin, INPUT_PULLUP);
 	pinMode (config.relayPin, OUTPUT);
 
-    if (config.bootStatus != SAVE_RELAY_STATUS) {
-		config.relayStatus = (bool)config.bootStatus;
-		DEBUG_WARN ("Relay status set to Boot Status %d -> %d", config.bootStatus, config.relayStatus);
-	}
-	DEBUG_WARN ("Relay status set to %s", config.relayStatus ? "ON" : "OFF");
-	digitalWrite (config.relayPin, config.relayStatus);
+    
+	//digitalWrite (config.relayPin, config.relayStatus);
+
 	// if (!sendRelayStatus ()) {
 	// 	DEBUG_WARN ("Error sending relay status");
 	// }
@@ -210,31 +207,14 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 	// If your node should sleep after sending data do all remaining tasks here
 }
 
-void CONTROLLER_CLASS_NAME::toggleRelay () {
-	DEBUG_INFO ("Toggle relay");
-	config.relayStatus = !config.relayStatus;
-	digitalWrite (config.relayPin, config.relayStatus ? ON : OFF);
-	if (config.bootStatus == SAVE_RELAY_STATUS) {
-		if (saveConfig ()) {
-			DEBUG_INFO ("Config updated. Relay is %s", config.relayStatus ? "ON" : "OFF");
-		} else {
-			DEBUG_ERROR ("Error saving config");
-		}
-	}
-	sendRelayStatus ();
-}
 
 void CONTROLLER_CLASS_NAME::setRelay (bool state) {
 	DEBUG_WARN ("Set relay %s", state ? "ON" : "OFF");
 	config.relayStatus = state;
 	digitalWrite (config.relayPin, config.relayStatus ? ON : OFF);
-	if (config.bootStatus == SAVE_RELAY_STATUS) {
-		if (saveConfig ()) {
-			DEBUG_WARN ("Config updated. Relay is %s", config.relayStatus ? "ON" : "OFF");
-		} else {
-			DEBUG_ERROR ("Error saving config");
-		}
-	}
+	sendRelayStatus();
+	if (state) lastActiveStatus = millis();
+	
 }
 
 /*void CONTROLLER_CLASS_NAME::setLinked (bool state) {
@@ -247,31 +227,19 @@ void CONTROLLER_CLASS_NAME::setRelay (bool state) {
 	}
 }*/
 
-void CONTROLLER_CLASS_NAME::setBoot (int state) {
-	DEBUG_WARN ("Set boot state to %d", state);
-	if (state >= RELAY_OFF && state <= SAVE_RELAY_STATUS) {
-		config.bootStatus = (bootRelayStatus_t)state;
-	} else {
-		config.bootStatus = RELAY_OFF;
-	}
 
-	if (saveConfig ()) {
-		DEBUG_WARN ("Config updated");
-	} else {
-		DEBUG_ERROR ("Error saving config");
-	}
-}
 
 void CONTROLLER_CLASS_NAME::loop () {
 
+	static clock_t delayActivePeriod = 3000;
 	// If your node stays allways awake do your periodic task here
-	if (doorOpened) { // Enter this only if button were not pushed in the last loop
-		if (!digitalRead (config.sensorPin)) {
+	if (doorNotClosed) { // Enter this only if button were not pushed in the last loop
+		if (!digitalRead (config.closedPin)) {
 			delay (50); // debounce button push
-			if (!digitalRead (config.sensorPin)) {
-				DEBUG_INFO ("Button triggered!");
+			if (!digitalRead (config.closedPin)) {
+				DEBUG_INFO ("close triggered!");
 				doorClosed = true; // Button is pushed
-				doorOpened = false; // Mark button as not released
+				doorNotClosed = false; // Mark button as not released
 			}
 		}
 	}
@@ -280,8 +248,8 @@ void CONTROLLER_CLASS_NAME::loop () {
 		doorClosed = false; // Disable push trigger
 		const size_t capacity = JSON_OBJECT_SIZE (2);
 		DynamicJsonDocument json (capacity);
-		json[sensorKey] = config.sensorPin;
-		json["door"] = 0;
+		json["sensor"] = config.closedPin;
+		json["close"] = 0;
 		if (sendJson (json)) {
 			DEBUG_INFO ("Closed door sent");
 		} else {
@@ -292,14 +260,14 @@ void CONTROLLER_CLASS_NAME::loop () {
 		}*/
 	}
 
-	if (!doorOpened) {
-		if (digitalRead (config.sensorPin)) { // If button is released
-			DEBUG_INFO ("Button released");
+	if (!doorNotClosed) {
+		if (digitalRead (config.closedPin)) { // If button is released
+			DEBUG_INFO ("close released");
 			doorOpened = true;
 			const size_t capacity = JSON_OBJECT_SIZE (2);
 			DynamicJsonDocument json (capacity);
-			json[sensorKey] = config.sensorPin;
-			json["door"] = 1;
+			json["sensor"] = config.closedPin;
+			json["close"] = 1;
 			if (sendJson (json)) {
 				DEBUG_INFO ("Opened door sent");
 			} else {
@@ -307,6 +275,60 @@ void CONTROLLER_CLASS_NAME::loop () {
 			}
 		}
     }
+
+	if (doorNotOpened) { // Enter this only if button were not pushed in the last loop
+		if (!digitalRead (config.openedPin)) {
+			delay (50); // debounce button push
+			if (!digitalRead (config.openedPin)) {
+				DEBUG_INFO ("opens triggered!");
+				doorOpened = true; // Button is pushed
+				doorNotOpened = false; // Mark button as not released
+			}
+		}
+	}
+
+	if (doorOpened) { // If button was pushed
+		doorOpened = false; // Disable push trigger
+		const size_t capacity = JSON_OBJECT_SIZE (2);
+		DynamicJsonDocument json (capacity);
+		json["sensor"] = config.openedPin;
+		json["open"] = 0;
+		if (sendJson (json)) {
+			DEBUG_INFO ("Opened door sent");
+		} else {
+			DEBUG_ERROR ("Opened send error");
+		}
+		/*if (config.linked) {
+			toggleRelay ();
+		}*/
+	}
+
+	if (!doorNotOpened) {
+		if (digitalRead (config.openedPin)) { // If button is released
+			DEBUG_INFO ("Open released");
+			doorOpened = true;
+			const size_t capacity = JSON_OBJECT_SIZE (2);
+			DynamicJsonDocument json (capacity);
+			json[openedKey] = config.openedPin;
+			json["open"] = 1;
+			if (sendJson (json)) {
+				DEBUG_INFO ("Opened door sent");
+			} else {
+				DEBUG_ERROR ("Open send error");
+			}
+		}
+    }
+
+	if (config.relayStatus == 1){
+		
+		if (millis () - lastActiveStatus > delayActivePeriod) {
+			setRelay (0);
+			DEBUG_INFO ("desactivado a los 3seg.");
+    	}
+
+
+
+	}
 
     static clock_t lastSentStatus;
     static clock_t sendStatusPeriod = 2000;
@@ -320,11 +342,11 @@ void CONTROLLER_CLASS_NAME::loop () {
 CONTROLLER_CLASS_NAME::~CONTROLLER_CLASS_NAME () {
 	// It your class uses dynamic data free it up here
 	// This is normally not needed but it is a good practice
-	if (sensorPinParam) {
-		delete (sensorPinParam);
+	if (openedPinParam) {
+		delete (openedPinParam);
 		delete (relayPinParam);
-		delete (bootStatusListParam);
-		delete (bootStatusParam);
+		delete (closedPinParam);
+		
 	}
 }
 
@@ -332,11 +354,14 @@ void CONTROLLER_CLASS_NAME::configManagerStart () {
 	DEBUG_WARN ("==== CCost Controller Configuration start ====");
 	// If you need to add custom configuration parameters do it here
 
-	static char sensorPinParamStr[4];
-	itoa (DEFAULT_SENSOR_PIN, sensorPinParamStr, 10);
+	static char closedPinParamStr[4];
+	itoa (DEFAULT_CLOSE_PIN, closedPinParamStr, 10);
+	static char openedPinParamStr[4];
+	itoa (DEFAULT_CLOSE_PIN, openedPinParamStr, 10);
 	static char relayPinParamStr[4];
 	itoa (DEFAULT_RELAY_PIN, relayPinParamStr, 10);
-	sensorPinParam = new AsyncWiFiManagerParameter ("sensorPin", "Sensor Pin", sensorPinParamStr, 3, "required type=\"text\" pattern=\"^1[2-5]$|^[0-5]$\"");
+	closedPinParam = new AsyncWiFiManagerParameter ("closePin", "Sensor Pin", closedPinParamStr, 3, "required type=\"text\" pattern=\"^1[2-5]$|^[0-5]$\"");
+	openedPinParam = new AsyncWiFiManagerParameter ("openPin", "Sensor Pin", openedPinParamStr, 3, "required type=\"text\" pattern=\"^1[2-5]$|^[0-5]$\"");
 	relayPinParam = new AsyncWiFiManagerParameter ("relayPin", "Relay Pin", relayPinParamStr, 3, "required type=\"text\" pattern=\"^1[2-5]$|^[0-5]$\"");
 	//bootStatusParam = new AsyncWiFiManagerParameter ("bootStatus", "Boot Relay Status", "", 6, "required type=\"text\" list=\"bootStatusList\" pattern=\"^ON$|^OFF$|^SAVE$\"");
 	/*bootStatusListParam = new AsyncWiFiManagerParameter ("<datalist id=\"bootStatusList\">" \
@@ -345,7 +370,8 @@ void CONTROLLER_CLASS_NAME::configManagerStart () {
 														 "<option value = \"ON\">" \
 														 "<option value = \"SAVE\">" \
 														 "</datalist>");*/
-	EnigmaIOTNode.addWiFiManagerParameter (sensorPinParam);
+	EnigmaIOTNode.addWiFiManagerParameter (closedPinParam);
+	EnigmaIOTNode.addWiFiManagerParameter (openedPinParam);
     EnigmaIOTNode.addWiFiManagerParameter (relayPinParam);
     //EnigmaIOTNode.addWiFiManagerParameter (bootStatusListParam);
     //EnigmaIOTNode.addWiFiManagerParameter (bootStatusParam);
@@ -354,28 +380,25 @@ void CONTROLLER_CLASS_NAME::configManagerStart () {
 void CONTROLLER_CLASS_NAME::configManagerExit (bool status) {
 	DEBUG_WARN ("==== CCost Controller Configuration result ====");
 	// You can read configuration paramenter values here
-	DEBUG_WARN ("Button Pin: %s", sensorPinParam->getValue ());
-	DEBUG_WARN ("Boot Relay Status: %s", bootStatusParam->getValue ());
-
+	DEBUG_WARN ("Button Pin: %s", closedPinParam->getValue ());
+	DEBUG_WARN ("Button Pin: %s", openedPinParam->getValue ());
+	
 	// TODO: Finish bootStatusParam analysis
 
 	if (status) {
-		config.sensorPin = atoi (sensorPinParam->getValue ());
-		if (config.sensorPin > 15 || config.sensorPin < 0) {
-			config.sensorPin = DEFAULT_SENSOR_PIN;
+		config.closedPin = atoi (closedPinParam->getValue ());
+		if (config.closedPin > 15 || config.closedPin < 0) {
+			config.closedPin = DEFAULT_CLOSE_PIN;
+		}
+		config.openedPin = atoi (openedPinParam->getValue ());
+		if (config.openedPin > 15 || config.openedPin < 0) {
+			config.openedPin = DEFAULT_OPEN_PIN;
 		}
 		config.relayPin = atoi (relayPinParam->getValue ());
 		if (config.relayPin > 15 || config.relayPin < 0) {
-			config.relayPin = DEFAULT_SENSOR_PIN;
+			config.relayPin = DEFAULT_RELAY_PIN;
 		}
-		if (!strncmp (bootStatusParam->getValue (), "ON", 6)) {
-			config.bootStatus = RELAY_ON;
-		} else if (!strncmp (bootStatusParam->getValue (), "SAVE", 6)) {
-			config.bootStatus = SAVE_RELAY_STATUS;
-		} else {
-			config.bootStatus = RELAY_OFF;
-		}
-		config.ON_STATE = OFF;
+		
 		//config.linked = true;
 
 		if (!saveConfig ()) {
@@ -389,7 +412,8 @@ void CONTROLLER_CLASS_NAME::configManagerExit (bool status) {
 }
 
 void CONTROLLER_CLASS_NAME::defaultConfig () {
-	config.sensorPin = DEFAULT_SENSOR_PIN;
+	config.closedPin = DEFAULT_CLOSE_PIN;
+	config.openedPin = DEFAULT_OPEN_PIN;
 	config.relayPin = DEFAULT_RELAY_PIN;
 	//config.linked = true;
 	config.ON_STATE = OFF;
@@ -421,14 +445,16 @@ bool CONTROLLER_CLASS_NAME::loadConfig () {
 				DEBUG_WARN ("JSON file parsed");
 			}
 
-			if (doc.containsKey ("sensorPin") &&
-				doc.containsKey ("relayPin") &&
+			if (doc.containsKey ("closedPin") &&
+				doc.containsKey ("openedPin") &&
+				doc.containsKey ("relayPin")){
 				//doc.containsKey ("linked") &&
 				//doc.containsKey ("ON_STATE") &&
 				//doc.containsKey ("bootStatus")) {
 
 				json_correct = true;
-				config.sensorPin = doc["sensorPin"].as<int> ();
+				config.closedPin = doc["closedPin"].as<int> ();
+				config.openedPin = doc["openedPin"].as<int> ();
 				config.relayPin = doc["relayPin"].as<int> ();
 				//config.linked = doc["linked"].as<bool> ();
 				//config.ON_STATE = doc["ON_STATE"].as<int> ();
@@ -436,9 +462,9 @@ bool CONTROLLER_CLASS_NAME::loadConfig () {
 				/*if (bootStatus >= RELAY_OFF && bootStatus <= SAVE_RELAY_STATUS) {
 					config.bootStatus = (bootRelayStatus_t)bootStatus;
 					DEBUG_WARN ("Boot status set to %d", config.bootStatus);
-				} else {*/
+				} else {
 					config.bootStatus = RELAY_OFF;
-				//}
+				//}*/
 			}
 
 			if (doc.containsKey ("relayStatus")) {
@@ -452,11 +478,12 @@ bool CONTROLLER_CLASS_NAME::loadConfig () {
 				DEBUG_WARN ("Smart switch controller configuration error");
 			}
 			DEBUG_WARN ("==== Smart switch Controller Configuration ====");
-			DEBUG_WARN ("Button pin: %d", config.sensorPin);
+			DEBUG_WARN ("Button pin: %d", config.closedPin);
+			DEBUG_WARN ("Button pin: %d", config.openedPin);
 			DEBUG_WARN ("Relay pin: %d", config.relayPin);
 			//DEBUG_WARN ("Linked: %s", config.linked ? "true" : "false");
 			//DEBUG_WARN ("ON level: %s ", config.ON_STATE ? "HIGH" : "LOW");
-			DEBUG_WARN ("Boot relay status: %d ", config.bootStatus);
+			//DEBUG_WARN ("Boot relay status: %d ", config.bootStatus);
 
 
 			size_t jsonLen = measureJsonPretty (doc) + 1;
@@ -497,7 +524,8 @@ bool CONTROLLER_CLASS_NAME::saveConfig () {
 
 	DynamicJsonDocument doc (512);
 
-	doc["sensorPin"] = config.sensorPin;
+	doc["closedPin"] = config.closedPin;
+	doc["openedPin"] = config.openedPin;
 	doc["relayPin"] = config.relayPin;
 	//doc["linked"] = config.linked;
 	//doc["ON_STATE"] = config.ON_STATE;
@@ -635,10 +663,11 @@ void CONTROLLER_CLASS_NAME::buildHABinarySensorDiscovery () {
     // Add your characteristics here
     // There is no need to futher modify this function
 
-    haEntity->setNameSufix ("sensor");
-    haEntity->setType (garage_door);
+    haEntity->setNameSufix ("p_cochera");
+    haEntity->setDeviceClass (bs_garage_door);
     //haEntity->setSubtype (turn_on);
-    haEntity->setPayload ("{\"sensor\":4,\"door\":1}");
+    haEntity->setPayloadOn ("{\"sensor\":14,\"close\":1}");
+	haEntity->setPayloadOff ("{\"sensor\":12,\"open\":1}");
     // *******************************
 
     size_t bufferLen = haEntity->measureMessage ();
