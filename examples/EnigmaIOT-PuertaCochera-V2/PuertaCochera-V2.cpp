@@ -178,6 +178,7 @@ void CONTROLLER_CLASS_NAME::connectInform () {
     // Register every HAEntity discovery function here. As many as you need
     addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHASwitchDiscovery, this));
     addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHABinarySensorDiscovery, this));
+	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHABinarySensorDiscovery2, this));
     //addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHALinkDiscovery, this));
 #endif
 
@@ -232,24 +233,28 @@ void CONTROLLER_CLASS_NAME::setRelay (bool state) {
 void CONTROLLER_CLASS_NAME::loop () {
 
 	static clock_t delayActivePeriod = 3000;
+	static bool door;
 	// If your node stays allways awake do your periodic task here
 	if (doorNotClosed) { // Enter this only if button were not pushed in the last loop
+		
 		if (!digitalRead (config.closedPin)) {
 			delay (50); // debounce button push
 			if (!digitalRead (config.closedPin)) {
 				DEBUG_INFO ("close triggered!");
 				doorClosed = true; // Button is pushed
 				doorNotClosed = false; // Mark button as not released
+				door = 0;
 			}
 		}
 	}
 
 	if (doorClosed) { // If button was pushed
 		doorClosed = false; // Disable push trigger
+		
 		const size_t capacity = JSON_OBJECT_SIZE (2);
 		DynamicJsonDocument json (capacity);
-		json["sensor"] = config.closedPin;
-		json["close"] = 1;
+		json["closed"] = door == true ? 1:0;
+		json["door"] = 0;
 		if (sendJson (json)) {
 			DEBUG_INFO ("Closed door sent");
 		} else {
@@ -263,11 +268,12 @@ void CONTROLLER_CLASS_NAME::loop () {
 	if (!doorNotClosed) {
 		if (digitalRead (config.closedPin)) { // If button is released
 			DEBUG_INFO ("close released");
+			door = 1;
 			doorNotClosed = true;
 			const size_t capacity = JSON_OBJECT_SIZE (2);
 			DynamicJsonDocument json (capacity);
 			json["sensor"] = config.closedPin;
-			json["close"] = 0;
+			json["closed"] = door == true ? 1:0;
 			if (sendJson (json)) {
 				DEBUG_INFO ("Opened door sent");
 			} else {
@@ -292,7 +298,7 @@ void CONTROLLER_CLASS_NAME::loop () {
 		const size_t capacity = JSON_OBJECT_SIZE (2);
 		DynamicJsonDocument json (capacity);
 		json["sensor"] = config.openedPin;
-		json["open"] = 1;
+		json["door"] = 1;
 		if (sendJson (json)) {
 			DEBUG_INFO ("Opened door sent");
 		} else {
@@ -330,13 +336,20 @@ void CONTROLLER_CLASS_NAME::loop () {
 
 	}
 
-    /*static clock_t lastSentStatus;
+    static clock_t lastSentStatus;
     static clock_t sendStatusPeriod = 2000;
     if (enigmaIotNode->isRegistered () && millis () - lastSentStatus > sendStatusPeriod) {
         lastSentStatus = millis ();
-        sendStatusPeriod = 300000;
-        sendRelayStatus ();
-    }*/
+        sendStatusPeriod = 180000;
+        const size_t capacity = JSON_OBJECT_SIZE (2);
+		DynamicJsonDocument json (capacity);
+		json["closed"] = door == true ? 1:0;
+		if (sendJson (json)) {
+			DEBUG_INFO ("Closed door sent");
+		} else {
+			DEBUG_ERROR ("Closed send error");
+		}
+    }
 }
 
 CONTROLLER_CLASS_NAME::~CONTROLLER_CLASS_NAME () {
@@ -650,11 +663,11 @@ void CONTROLLER_CLASS_NAME::buildHASwitchDiscovery () {
 
 void CONTROLLER_CLASS_NAME::buildHABinarySensorDiscovery () {
     // Select corresponding HAEntiny type
-    HABinarySensor* haEntity = new HABinarySensor ();
+    HABinarySensor* haBEntity = new HABinarySensor ();
 
     uint8_t* msgPackBuffer;
 
-    if (!haEntity) {
+    if (!haBEntity) {
         DEBUG_WARN ("JSON object instance does not exist");
         return;
     }
@@ -663,18 +676,20 @@ void CONTROLLER_CLASS_NAME::buildHABinarySensorDiscovery () {
     // Add your characteristics here
     // There is no need to futher modify this function
 
-    haEntity->setNameSufix ("p_cochera");
-    haEntity->setDeviceClass (bs_garage_door);
+    haBEntity->setNameSufix ("p_cochera");
+    haBEntity->setDeviceClass (bs_garage_door);
     //haEntity->setSubtype (turn_on);
-    haEntity->setPayloadOn ("{\"sensor\":14,\"open\":1}");
-	haEntity->setPayloadOff ("{\"sensor\":12,\"close\":1}");
+    haBEntity->setPayloadOff ("0");
+    haBEntity->setPayloadOn ("1");
+    haBEntity->setValueField ("door");  // nombre del json del valor a capurar 
     // *******************************
+	
 
-    size_t bufferLen = haEntity->measureMessage ();
+    size_t bufferLen = haBEntity->measureMessage ();
 
     msgPackBuffer = (uint8_t*)malloc (bufferLen);
 
-    size_t len = haEntity->getAnounceMessage (bufferLen, msgPackBuffer);
+    size_t len = haBEntity->getAnounceMessage (bufferLen, msgPackBuffer);
 
     DEBUG_INFO ("Resulting MSG pack length: %d", len);
 
@@ -682,8 +697,53 @@ void CONTROLLER_CLASS_NAME::buildHABinarySensorDiscovery () {
         DEBUG_WARN ("Error sending HA discovery message");
     }
 
-    if (haEntity) {
-        delete (haEntity);
+    if (haBEntity) {
+        delete (haBEntity);
+    }
+
+    if (msgPackBuffer) {
+        free (msgPackBuffer);
+    }
+}
+
+void CONTROLLER_CLASS_NAME::buildHABinarySensorDiscovery2 () {
+    // Select corresponding HAEntiny type
+    HABinarySensor* haBEntity2 = new HABinarySensor ();
+
+    uint8_t* msgPackBuffer;
+
+    if (!haBEntity2) {
+        DEBUG_WARN ("JSON object instance does not exist");
+        return;
+    }
+
+    // *******************************
+    // Add your characteristics here
+    // There is no need to futher modify this function
+
+    haBEntity2->setNameSufix ("cerrada");
+    haBEntity2->setDeviceClass (bs_opening);
+    haBEntity2->addExpiration (3600);
+    haBEntity2->setPayloadOff ("0");
+    haBEntity2->setPayloadOn ("1");
+    haBEntity2->setValueField ("closed");  // nombre del json del valor a capurar 
+    // *******************************
+	
+
+    size_t bufferLen = haBEntity2->measureMessage ();
+
+    msgPackBuffer = (uint8_t*)malloc (bufferLen);
+
+    size_t len = haBEntity2->getAnounceMessage (bufferLen, msgPackBuffer);
+
+    DEBUG_INFO ("Resulting MSG pack length: %d", len);
+
+    if (!sendHADiscovery (msgPackBuffer, len)) {
+        DEBUG_WARN ("Error sending HA discovery message");
+    }
+
+    if (haBEntity2) {
+        delete (haBEntity2);
     }
 
     if (msgPackBuffer) {

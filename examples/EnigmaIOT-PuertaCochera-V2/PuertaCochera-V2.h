@@ -122,6 +122,7 @@ protected:
      */
     void buildHASwitchDiscovery ();
     void buildHABinarySensorDiscovery ();
+	void buildHABinarySensorDiscovery2 ();
     //void buildHALinkDiscovery ();
 
 	// ------------------------------------------------------------
