@@ -22,15 +22,17 @@ static const char* CONTROLLER_NAME = "Compost controller";
 #include <haSensor.h>
 #endif
 
+#include <OneWire.h>
 #include <DallasTemperature.h>
-#include <HTU21D.h>
+#include <AHT10.h>
 #include <Wire.h>
+
 // --------------------------------------------------
 // You may define data structures and constants here
 // --------------------------------------------------
 
 
-static const uint8_t PUERTA_MY_VERS[3] = { 1,0,1 }; ///< @brief Compost Version
+static const uint8_t PUERTA_MY_VERS[3] = { 1,4,0 }; ///< @brief Compost Version
 
 class CONTROLLER_CLASS_NAME : EnigmaIOTjsonController {
 protected:
@@ -38,7 +40,10 @@ protected:
 	// add all parameters that your project needs here
 	// --------------------------------------------------
 	
+	OneWire* oneWire;
+	uint8_t readStatus = 0;
 	DallasTemperature* sensors;
+	
     DeviceAddress insideThermometer;
     bool tempSent = false;
 	//bool tempSent2 = false;
@@ -107,7 +112,7 @@ protected:
     void buildHADs18b20Discovery ();
 	void buildHAAht10TempDiscovery ();
 	void buildHAAht10HumDiscovery ();
-	void buildHABattDiscovery ();
+	void buildHASolarVDiscovery ();
 #endif
     
     // ------------------------------------------------------------

@@ -18,8 +18,8 @@
 #include <EnigmaIOTjsonController.h>
 #include <FailSafe.h>
 #include "CompostController.h" // <-- Include here your controller class header
-#include <OneWire.h>
-#include <DallasTemperature.h>
+
+
 
 #include <EnigmaIOTNode.h>
 #include <espnow_hal.h>
@@ -114,7 +114,7 @@ void setup () {
 
 #ifdef USE_SERIAL
     Serial.begin (115200);
-	Serial.begin (115200); Serial.println (); Serial.printf ("enigmaiot_Cochera-vd.%d.%d.%d-Enigma-v%d.%d.%d",
+	Serial.begin (115200); Serial.println (); Serial.printf ("enigmaiot_Compost-v.%d.%d.%d-Enigma-v%d.%d.%d",
                   PUERTA_MY_VERS[0], PUERTA_MY_VERS[1], PUERTA_MY_VERS[2], ENIGMAIOT_PROT_VERS[0], ENIGMAIOT_PROT_VERS[1], ENIGMAIOT_PROT_VERS[2]);
 	
 	Serial.println ("----Reset Pin D7----");

@@ -19,14 +19,12 @@ constexpr auto CONFIG_FILE = "/customconf.json"; ///< @brief Custom configuratio
 
 #define ONE_WIRE_BUS 14 //(D5)  evita el gpio0 (D2)
  
-OneWire* oneWire;
 
-uint8_t readStatus = 0;
-
-HTU21D            myHTU21D(HTU21D_RES_RH12_TEMP14);
+float valueTH = 0;
+AHT10 myAHT10 (AHT10_ADDRESS_0X38);
 
 
-ADC_MODE (ADC_VCC);
+//ADC_MODE (ADC_VCC);
 
 
 bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint8_t* buffer, uint8_t length, nodeMessageType_t command, nodePayloadEncoding_t payloadEncoding) {
@@ -55,7 +53,7 @@ bool CONTROLLER_CLASS_NAME::sendTempHum (float temp, float tempe, float hum) {
 	json["TInt"] = temp;
     json["TExt"] = tempe;
 	json["hum"] = hum;
-    json["batt"] = (float)(ESP.getVcc ()) / 1000;
+    json["solar"] = (float)(analogRead(A0)) / 157; // R300+220k; 1023/6.5v
 	
 
 	return sendJson (json);
@@ -68,6 +66,7 @@ void CONTROLLER_CLASS_NAME::connectInform () {
     addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHADs18b20Discovery, this));
     addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAAht10TempDiscovery, this));
     addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAAht10HumDiscovery, this));
+    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHASolarVDiscovery, this));
     
 #endif
 
@@ -86,7 +85,8 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 	sensors->setWaitForConversion (false);
 	sensors->requestTemperatures ();
 #endif
-	myHTU21D.begin(); // default SDA & SCL pin (D2,D1)
+    myAHT10.begin(D1, D2);
+	//myHTU21D.begin(); // default SDA & SCL pin (D2,D1)
     time_t start = millis ();
 
     // Send a 'hello' message when initalizing is finished
@@ -105,9 +105,8 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 #else
     tempC = 25.8;
 #endif
-	
-    humidity    = myHTU21D.readCompensatedHumidity();
-    temperature = myHTU21D.readTemperature();
+	temperature = myAHT10.readTemperature(AHT10_FORCE_READ_DATA); //read 6-bytes over I2C
+    humidity    = myAHT10.readHumidity(AHT10_USE_READ_DATA);      //use same 6-bytes
     
     // Send a 'hello' message when initalizing is finished
     //sendStartAnouncement ();
@@ -312,7 +311,7 @@ void CONTROLLER_CLASS_NAME::buildHAAht10HumDiscovery () {
     }
 		
 }
-void CONTROLLER_CLASS_NAME::buildHABattDiscovery () {
+void CONTROLLER_CLASS_NAME::buildHASolarVDiscovery () {
     // Select corresponding HAEntiny type
     HASensor* haEntity = new HASensor ();
 	
@@ -327,11 +326,11 @@ void CONTROLLER_CLASS_NAME::buildHABattDiscovery () {
     // Add your characteristics here
     // There is no need to futher modify this function
 
-    haEntity->setNameSufix ("Batt");
-    haEntity->setDeviceClass (sensor_battery);
+    haEntity->setNameSufix ("Solar_v");
+    haEntity->setDeviceClass (sensor_voltage);
     haEntity->setExpireTime (3600);
     haEntity->setUnitOfMeasurement ("v");
-    haEntity->setValueField ("batt");
+    haEntity->setValueField ("solar");
     //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
 
     // *******************************
