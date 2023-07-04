@@ -175,10 +175,11 @@ bool CONTROLLER_CLASS_NAME::sendCommandResp (const char* command, bool result) {
 	return true;
 }
 
-bool CONTROLLER_CLASS_NAME::sendTemperature (float temp) {
-	const size_t capacity = JSON_OBJECT_SIZE (2);
+bool CONTROLLER_CLASS_NAME::sendTemperature (float temp, float temp1) {
+	const size_t capacity = JSON_OBJECT_SIZE (3);
 	DynamicJsonDocument json (capacity);
-	json["temp"] = temp;
+	json["temp0"] = temp;
+	json["temp1"] = temp1;
 
 	return sendJson (json);
 }
@@ -336,7 +337,7 @@ void CONTROLLER_CLASS_NAME::loop () {
 		tempC1 = sensors->getTempCByIndex (1);
 		
 		while (!tempSent && enigmaIotNode->isRegistered()) {
-        	if (sendTemperature (tempC) && sendTemperature (tempC1) ) {
+        	if (sendTemperature (tempC, tempC1) ) {
             	tempSent = true;
         	}
 			
@@ -725,7 +726,7 @@ void CONTROLLER_CLASS_NAME::buildHATempin () {
     haEntity->setDeviceClass (sensor_temperature);
     haEntity->setExpireTime (3600);
     haEntity->setUnitOfMeasurement ("ºC");
-    haEntity->setValueField ("temp");
+    haEntity->setValueField ("temp0");
     //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
 
     // *******************************
@@ -769,7 +770,7 @@ void CONTROLLER_CLASS_NAME::buildHATempout () {
     haEntity->setDeviceClass (sensor_temperature);
     haEntity->setExpireTime (3600);
     haEntity->setUnitOfMeasurement ("ºC");
-    haEntity->setValueField ("temp");
+    haEntity->setValueField ("temp1");
     //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
 
     // *******************************

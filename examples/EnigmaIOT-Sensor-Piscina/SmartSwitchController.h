@@ -151,7 +151,7 @@ protected:
 
 	bool sendBootStatus ();
 
-	bool sendTemperature (float temp);
+	bool sendTemperature (float temp, float temp1);
 };
 
 #endif
