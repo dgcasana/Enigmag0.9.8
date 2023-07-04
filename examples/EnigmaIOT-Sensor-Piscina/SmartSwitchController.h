@@ -1,7 +1,7 @@
 // BasicController.h
 
-#ifndef _DS18B20CONTROLLER_h
-#define _DS18B20CONTROLLER_h
+#ifndef _BASICCONTROLLER_h
+#define _BASICCONTROLLER_h
 
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
@@ -16,10 +16,12 @@
 #endif
 
 #include <EnigmaIOTjsonController.h>
-#define CONTROLLER_CLASS_NAME ds18b20Controller
-static const char* CONTROLLER_NAME = "DS18B20 controller";
+#define CONTROLLER_CLASS_NAME SmartSwitchController
+static const char* CONTROLLER_NAME = "SamrtSwitch controller";
 
 #if SUPPORT_HA_DISCOVERY    
+#include <haTrigger.h>
+#include <haSwitch.h>
 #include <haSensor.h>
 #endif
 
@@ -28,17 +30,45 @@ static const char* CONTROLLER_NAME = "DS18B20 controller";
 // --------------------------------------------------
 #include <DallasTemperature.h>
 
+#define DEFAULT_BUTTON_PIN D3
+#define DEFAULT_RELAY_PIN D1
+#define ON HIGH
+#define OFF !ON
+
+typedef enum {
+	RELAY_OFF = 0,
+	RELAY_ON = 1,
+	SAVE_RELAY_STATUS = 2
+} bootRelayStatus_t;
+
+struct smartSwitchControllerHw_t {
+	int relayPin;
+	bool relayStatus;
+	uint8_t buttonPin;
+	bool linked;
+	bootRelayStatus_t bootStatus;
+	int ON_STATE;
+};
 
 class CONTROLLER_CLASS_NAME : EnigmaIOTjsonController {
 protected:
 	// --------------------------------------------------
 	// add all parameters that your project needs here
 	// --------------------------------------------------
+
 	OneWire* oneWire;
 	DallasTemperature* sensors;
     DeviceAddress insideThermometer;
     bool tempSent = false;
-    float tempC;
+    float tempC, tempC1;
+
+	bool pushTriggered = false;
+	bool pushReleased = true;
+	smartSwitchControllerHw_t config;
+	AsyncWiFiManagerParameter* buttonPinParam;
+	AsyncWiFiManagerParameter* relayPinParam;
+	AsyncWiFiManagerParameter* bootStatusParam;
+	AsyncWiFiManagerParameter* bootStatusListParam;
 
 public:
 	void setup (EnigmaIOTNodeClass* node, void* data = NULL);
@@ -51,7 +81,7 @@ public:
 
 	/**
 	 * @brief Called when wifi manager starts config portal
-	 * @param node Pointer to EnigmaIOT gateway instance
+	 * @param node< Pointer to EnigmaIOT gateway instance
 	 */
 	void configManagerStart ();
 
@@ -92,20 +122,36 @@ protected:
         return sendJson (json);
     }
 
-#if SUPPORT_HA_DISCOVERY    
     /**
      * @brief Sends a HA discovery message for a single entity. Add as many functions like this
      * as number of entities you need to create
      */
-    void buildHADiscovery ();
-#endif
-    
-    // ------------------------------------------------------------
+    void buildHASwitchDiscovery ();
+    void buildHATriggerDiscovery ();
+    void buildHALinkDiscovery ();
+	void buildHATempin ();
+	void buildHATempout ();
+
+	// ------------------------------------------------------------
 	// You may add additional method definitions that you need here
 	// ------------------------------------------------------------
+	void defaultConfig ();
 
-    bool sendTemperature (float temp);
+	void toggleRelay ();
 
+	void setRelay (bool state);
+
+	bool sendRelayStatus ();
+
+	void setLinked (bool state);
+
+	bool sendLinkStatus ();
+
+	void setBoot (int state);
+
+	bool sendBootStatus ();
+
+	bool sendTemperature (float temp);
 };
 
 #endif
