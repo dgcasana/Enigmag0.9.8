@@ -3,7 +3,7 @@
 // 
 
 #include <functional>
-#include "SmartSwitchController.h"
+#include "SmartSwitchPiscina.h"
 
 using namespace std;
 using namespace placeholders;

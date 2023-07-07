@@ -13,7 +13,7 @@
 #include <Arduino.h>
 #include <EnigmaIOTjsonController.h>
 #include <FailSafe.h>
-#include "SmartSwitchController.h" // <-- Include here your controller class header
+#include "SmartSwitchPiscina.h" // <-- Include here your controller class header
 
 #include <EnigmaIOTNode.h>
 #include <espnow_hal.h>
