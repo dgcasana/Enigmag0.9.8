@@ -210,7 +210,7 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 	sensors = new DallasTemperature (oneWire);
 	sensors->begin ();
 	sensors->setWaitForConversion (false);
-	sensors->requestTemperatures ();
+	//sensors->requestTemperatures ();     Esto en el loop
 #endif
     
     if (config.bootStatus != SAVE_RELAY_STATUS) {
@@ -285,6 +285,7 @@ void CONTROLLER_CLASS_NAME::setBoot (int state) {
 
 void CONTROLLER_CLASS_NAME::loop () {
 
+	tempSent = false;
 	// If your node stays allways awake do your periodic task here
 	if (pushReleased) { // Enter this only if button were not pushed in the last loop
 		if (!digitalRead (config.buttonPin)) {
@@ -324,8 +325,9 @@ void CONTROLLER_CLASS_NAME::loop () {
     static clock_t sendStatusPeriod = 2000;
     if (enigmaIotNode->isRegistered () && millis () - lastSentStatus > sendStatusPeriod) {
         lastSentStatus = millis ();
-        sendStatusPeriod = 300000;
+        sendStatusPeriod = 60000;
         sendRelayStatus ();
+		sensors.requestTemperatures();
 
 		time_t start = millis ();
 
@@ -336,7 +338,7 @@ void CONTROLLER_CLASS_NAME::loop () {
     	tempC = sensors->getTempCByIndex (0);
 		tempC1 = sensors->getTempCByIndex (1);
 		
-		while (!tempSent && enigmaIotNode->isRegistered()) {
+		if (!tempSent && enigmaIotNode->isRegistered()) {
         	if (sendTemperature (tempC, tempC1) ) {
             	tempSent = true;
         	}
