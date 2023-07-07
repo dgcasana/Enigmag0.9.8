@@ -327,7 +327,7 @@ void CONTROLLER_CLASS_NAME::loop () {
         lastSentStatus = millis ();
         sendStatusPeriod = 60000;
         sendRelayStatus ();
-		sensors.requestTemperatures();
+		sensors->requestTemperatures();
 
 		time_t start = millis ();
 
