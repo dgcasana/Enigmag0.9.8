@@ -44,7 +44,7 @@ static const char* CONTROLLER_NAME = "Caldera controller";
 #define ON HIGH
 #define OFF !ON
 
-static const uint8_t CALDERA_MY_VERS[3] = { 2,5,1 }; ///< @brief Caldera Version
+static const uint8_t CALDERA_MY_VERS[3] = { 2,5,2 }; ///< @brief Caldera Version
 
 typedef enum {
 	RELAY_OFF = 0,
