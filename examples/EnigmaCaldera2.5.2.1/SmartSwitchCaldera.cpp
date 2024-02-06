@@ -460,6 +460,7 @@ void CONTROLLER_CLASS_NAME::userCode(){
 		}
 		json["Pellets"] = nivelPellets;
 		json["termostato"] = termosta ? 1 : 0;  //influxdb no reconoce on/off
+		json["enPellet"] = config.pelletCtl ? 1 : 0;
 
 		
 		sendJson(json);
@@ -913,7 +914,7 @@ void CONTROLLER_CLASS_NAME::buildHAPAltaDiscovery () {
     // Add your characteristics here
     // There is no need to futher modify this function
 
-    haEntity->setNameSufix ("Ret.Alta");
+    haEntity->setNameSufix ("Ret_Alta");
     haEntity->setDeviceClass (sensor_temperature);
     haEntity->setExpireTime (3600);
     haEntity->setUnitOfMeasurement ("ºC");
@@ -958,7 +959,7 @@ void CONTROLLER_CLASS_NAME::buildHARetornoDiscovery () {
     // Add your characteristics here
     // There is no need to futher modify this function
 
-    haEntity->setNameSufix ("Ret.Baja");
+    haEntity->setNameSufix ("Ret_Baja");
     haEntity->setDeviceClass (sensor_temperature);
     haEntity->setExpireTime (3600);
     haEntity->setUnitOfMeasurement ("ºC");
