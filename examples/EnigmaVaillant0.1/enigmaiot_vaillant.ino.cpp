@@ -20,7 +20,7 @@
 #include <EnigmaIOTNode.h>
 #include <EnigmaIOTjsonController.h>
 #include <FailSafe.h>
-#include "SmartSwitchCaldera.h" // <-- Include here your controller class header
+#include "SmartSwitchVaillant.h" // <-- Include here your controller class header
 
 #include <EnigmaIOTNode.h>
 #include <espnow_hal.h>

@@ -3,7 +3,7 @@
 // 
 
 #include <functional>
-#include "SmartSwitchCaldera.h"
+#include "SmartSwitchVaillant.h"
 
 using namespace std;
 using namespace placeholders;
@@ -17,16 +17,9 @@ constexpr auto CONFIG_FILE = "/customconf.json"; ///< @brief Custom configuratio
 const char* relayKey = "rly";
 const char* commandKey = "cmd";
 const char* statusKey = "status";
-const char* bypassKey = "bypass";
-const char* pelletKey = "enPellet";
 const char* infoKey = "info";
-const char* tParoKey = "tParo";
-const char* tArranqueKey = "tArranque";
-const char* tMinimaKey = "tMinima";
 
-const time_t START_PERIOD = 7200000;  // 2 horas
 
-NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
 
 OneWire oneWire(ONE_WIRE_BUS);
 
@@ -34,10 +27,10 @@ DallasTemperature sensors(&oneWire);
 
 int termosta;
 unsigned long timeout;
-DeviceAddress termRetBaja   =  { 0x28, 0x20, 0x47, 0x75, 0xD0, 0x01, 0x3C, 0xF9 }; // {0x28, 0xE2, 0xE4, 0x95, 0xF0, 0x01, 0x3C, 0xA8};//
-DeviceAddress termRetAlta   =  { 0x28, 0xFF, 0x34, 0xB6, 0x51, 0x17, 0x04, 0x78 }; // {0x28, 0xBE, 0xF7, 0x95, 0xF0, 0x01, 0x3C, 0xC9}; //
-DeviceAddress termMezcla    =  { 0x28, 0xFF, 0x95, 0x6C, 0x53, 0x17, 0x04, 0xD3 }; // {0x28, 0xCD, 0x22, 0x95, 0xF0, 0x01, 0x3C, 0x84}; //
-DeviceAddress termAcumula   =  { 0x28, 0xFF, 0xA8, 0xDE, 0x9E, 0x20, 0xD6, 0xC6 }; // {0x28, 0xDB, 0x69, 0x95, 0xF0, 0x01, 0x3C, 0xF4}; //
+DeviceAddress termRetBaja   =  { 0x28, 0x6A, 0x33, 0x75, 0xD0, 0x01, 0x3C, 0x31 }; // 286A3375D0013C31
+DeviceAddress termRetAlta   =  { 0x28, 0x20, 0x47, 0x75, 0xD0, 0x01, 0x3C, 0xF9 }; // 28204775D0013CF9
+DeviceAddress termIdaBaja    =  { 0x28, 0xFF, 0xC1, 0xEF, 0x52, 0x17, 0x04, 0xA3 }; // 28FFC1EF521704A3
+DeviceAddress termIdaAlta   =  { 0x28, 0xFF, 0x34, 0xB6, 0x51, 0x17, 0x04, 0x78 }; // 28FF34B651170478
 
 bool unaVez = true;
 const size_t capacity = JSON_OBJECT_SIZE (5);
@@ -48,7 +41,7 @@ static time_t lastStart;
 
 
 
-float tempRetBaja, tempMezcla, tempRetAlta, tempAcumula, tempMin, nivelPellets;
+float tempRetBaja, tempIdaBaja, tempRetAlta, tempIdaAlta;
 
 
 
@@ -99,13 +92,7 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 				DEBUG_WARN ("Error sending relay status");
 				return false;
 			}
-		} else if (!strcmp (doc[commandKey], bypassKey)) {
-			DEBUG_WARN ("Request link status. Link = %s", config.bypass ? "enabled" : "disabled");
-			if (!sendBypassStatus ()) {
-				DEBUG_WARN ("Error sending link status");
-				return false;
-			}
-
+		
 		} else if (!strcmp (doc[commandKey], statusKey)) {
 			DEBUG_WARN ("Request node status.");
 			if (!sendNodeStatus ()) {
@@ -137,68 +124,8 @@ bool CONTROLLER_CLASS_NAME::processRxCommand (const uint8_t* address, const uint
 				DEBUG_WARN ("Error sending relay status");
 				return false;
 			}
-
-
-		} else if (!strcmp (doc[commandKey], bypassKey)) {
-			if (!doc.containsKey (bypassKey)) {
-				DEBUG_WARN ("Wrong format");
-				return false;
-			}
-			DEBUG_WARN ("Set bypass status. Bypass = %s", doc[bypassKey].as<bool> () ? "enabled" : "disabled");
-
-			setBypass (doc[bypassKey].as<bool> ());
-
-			if (!sendBypassStatus ()) {
-				DEBUG_WARN ("Error sending bypass status");
-				return false;
-			}
-
-			} else if (!strcmp (doc[commandKey], pelletKey)) {
-			if (!doc.containsKey (pelletKey)) {
-				DEBUG_WARN ("Wrong format");
-				return false;
-			}
-			DEBUG_WARN ("Set pelletCtl status. pelletCtl = %s", doc[pelletKey].as<bool> () ? "enabled" : "disabled");
-
-			config.pelletCtl = doc[pelletKey].as<bool> ();
-
-			if (!sendPelletStatus ()) {
-				DEBUG_WARN ("Error sending pelletCtl status");
-				return false;
-			}
-
-		}else if (!strcmp (doc[commandKey], tParoKey)) {
-			if (!doc.containsKey (tParoKey)) {
-				DEBUG_WARN ("Wrong format");
-				return false;
-			}
-			DEBUG_WARN ("Set temp Paro. tParo = %i", doc[tParoKey].as<int> ());
-			setParo(doc[tParoKey].as<int> ());
-		
-			//tParo = (doc[tParoKey].as<int> ());
-
-		}else if (!strcmp (doc[commandKey], tArranqueKey)) {
-			if (!doc.containsKey (tArranqueKey)) {
-				DEBUG_WARN ("Wrong format");
-				return false;
-			}
-			DEBUG_WARN ("Set temp Arranque. tArran = %i", doc[tArranqueKey].as<int> ());
-			setArran(doc[tArranqueKey].as<int> ());
-
-			//tArran = (doc[tArranqueKey].as<int> ());
-		
-		}else if (!strcmp (doc[commandKey], tMinimaKey)) {
-			if (!doc.containsKey (tMinimaKey)) {
-				DEBUG_WARN ("Wrong format");
-				return false;
-			}
-			DEBUG_WARN ("Set temp Minima. tMin = %i", doc[tMinimaKey].as<int> ());
-			setMin(doc[tMinimaKey].as<int> ());
-
-			//tArran = (doc[tArranqueKey].as<int> ());
 		}
 	}
-
 	return true;
 }
 
@@ -213,38 +140,13 @@ bool CONTROLLER_CLASS_NAME::sendRelayStatus () {
 	return sendJson (json);
 }
 
-bool CONTROLLER_CLASS_NAME::sendBypassStatus () {
-	const size_t capacity = JSON_OBJECT_SIZE (2);
-	DynamicJsonDocument json (capacity);
-
-	json[commandKey] = bypassKey;
-    json[bypassKey] = config.bypass ? 1 : 0;
-
-	return sendJson (json);
-}
-
-bool CONTROLLER_CLASS_NAME::sendPelletStatus () {
-	const size_t capacity = JSON_OBJECT_SIZE (2);
-	DynamicJsonDocument json (capacity);
-
-	json[commandKey] = pelletKey;
-    json[pelletKey] = config.pelletCtl ? 1 : 0;
-
-	return sendJson (json);
-}
 
 bool CONTROLLER_CLASS_NAME::sendNodeStatus () {
 	const size_t capacity = JSON_OBJECT_SIZE (9);
 	DynamicJsonDocument json (capacity);
 
 	json["lastState"] = lastState;
-    json[bypassKey] = config.bypass ? 1 : 0;
-	json[pelletKey] = config.pelletCtl ? 1 : 0;
-	json[relayKey] = config.relayStatus ? 1 : 0;
-	json["tParo"] = config.tParo;
-	json["tArranque"] = config.tArranq;
-	json["tMinima"] = config.tMin;
-	json["PerTempo"] = perTempo ? "Si" : "No";
+    json[relayKey] = config.relayStatus ? 1 : 0;
 	return sendJson (json);
 }
 
@@ -266,13 +168,11 @@ void CONTROLLER_CLASS_NAME::connectInform () {
 
 #if SUPPORT_HA_DISCOVERY    
 // Register every HAEntity discovery function here. As many as you need
-    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAPBajaDiscovery, this));
-	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAPAltaDiscovery, this));
-	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHARetornoDiscovery, this));
-	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAAcumulaDiscovery, this));
-    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHABypassDiscovery, this));
-	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAPelletDiscovery, this));
-	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHACalderaDiscovery, this));
+    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAIdaBajaDiscovery, this));
+	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAIdaAltaDiscovery, this));
+	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHARetBajaDiscovery, this));
+	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHARetAltaDiscovery, this));
+    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHACalderaDiscovery, this));
 #endif
 
     EnigmaIOTjsonController::connectInform ();
@@ -286,9 +186,9 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 	pinMode (RELAY_PIN, OUTPUT);
 	sensors.begin();
 	sensors.setResolution(termRetBaja, 10);
-	sensors.setResolution(termMezcla, 10);
+	sensors.setResolution(termIdaBaja, 10);
 	sensors.setResolution(termRetAlta, 10);
-	sensors.setResolution(termAcumula, 10);
+	sensors.setResolution(termIdaAlta, 10);
 
     if (config.bootStatus != SAVE_RELAY_STATUS) {
 		config.relayStatus = (bool)config.bootStatus;
@@ -301,13 +201,7 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 	//tArran = config.tArranq;
 	//tParo = config.tParo;
 
-	if (config.bypassStatus != SAVE_RELAY_STATUS) {
-		config.bypass = (bool)config.bypassStatus;
-		DEBUG_WARN ("Bypass status set to Bypass Status %d -> %d", config.bypassStatus, config.bypass);
-	}
-	DEBUG_WARN ("Bypass status set to %s", config.bypass ? "ON" : "OFF");
-
-    /// Send a 'hello' message when initalizing is finished
+	// Send a 'hello' message when initalizing is finished
     if (!(enigmaIotNode->getNode ()->getSleepy ())) {
         sendStartAnouncement ();  // Disable this if node is sleepy
     }
@@ -343,46 +237,6 @@ void CONTROLLER_CLASS_NAME::setRelay (bool state) {
 
 }
 
-void CONTROLLER_CLASS_NAME::setBypass (bool state) {
-	DEBUG_WARN ("Set bypass %s", state ? "ON" : "OFF");
-	config.bypass = state;
-	if (saveConfig ()) {
-		DEBUG_WARN ("Config updated. bypass");
-	} else {
-		DEBUG_ERROR ("Error saving config");
-	}
-}
-
-void CONTROLLER_CLASS_NAME::setParo (int temp) {
-	DEBUG_WARN ("Set tParo %d", temp);
-	config.tParo = temp;
-	if (saveConfig ()) {
-		DEBUG_WARN ("Config updated. tParo");
-	} else {
-		DEBUG_ERROR ("Error saving config");
-	}
-}
-
-void CONTROLLER_CLASS_NAME::setArran (int temp) {
-	DEBUG_WARN ("Set tArranque %d", temp);
-	config.tArranq = temp;
-	if (saveConfig ()) {
-		DEBUG_WARN ("Config updated. tArranque");
-	} else {
-		DEBUG_ERROR ("Error saving config");
-	}
-}
-
-void CONTROLLER_CLASS_NAME::setMin (int temp) {
-	DEBUG_WARN ("Set tMinima %d", temp);
-	config.tMin = temp;
-	if (saveConfig ()) {
-		DEBUG_WARN ("Config updated. tMinima");
-	} else {
-		DEBUG_ERROR ("Error saving config");
-	}
-}
-
 void CONTROLLER_CLASS_NAME::userCode(){
 	// Read sensor data
 		// Put here your code to read sensor and compose buffer
@@ -400,15 +254,16 @@ void CONTROLLER_CLASS_NAME::userCode(){
 		sensors.requestTemperatures();
 		// print the device information
 		tempRetBaja = sensors.getTempC(termRetBaja);
-		tempMezcla = sensors.getTempC(termMezcla);
+		tempIdaBaja = sensors.getTempC(termIdaBaja);
 		tempRetAlta = sensors.getTempC(termRetAlta);
-		tempAcumula = sensors.getTempC(termAcumula);
+		tempIdaAlta = sensors.getTempC(termIdaAlta);
 		//int lecturas=0,suma=0;
 		int distancia;
 
 		Serial.printf ("tempRetBaja: %f\n", tempRetBaja);
 		Serial.printf ("tempRetAlta: %f\n", tempRetAlta);
-		Serial.printf ("tempMezcla: %f\n", tempMezcla);
+		Serial.printf ("tempIdaAlta: %f\n", tempIdaAlta);
+		Serial.printf ("tempIdaBaja: %f\n", tempIdaBaja);
 			
 		// Nivel
 		//msg.addAnalogInput (0, (float)(ESP.getVcc ()) / 1000);
@@ -421,120 +276,19 @@ void CONTROLLER_CLASS_NAME::userCode(){
 		msg.addTemperature (10, tempPAlta);*/
 		
 		if (0 < tempRetBaja) json["RetBaja"] = tempRetBaja;  // evitamos temp -127
-		if (0 < tempMezcla) json["Mezcla"] = tempMezcla;
+		if (0 < tempIdaBaja) json["IdaBaja"] = tempIdaBaja;
 		if (0 < tempRetAlta) json["RetAlta"] = tempRetAlta;
-		if (0 < tempAcumula) json["Acumula"] = tempAcumula;
+		if (0 < tempIdaAlta) json["IdaAlta"] = tempIdaAlta;
 
 		//sendJson (json);
 				
 		//sendMsgPack(json);
 		//--
 			
-		for(int i=0;i<3;i++){
-			delay(50);                     // Wait 50ms between pings (about 20 pings/sec). 29ms should be the shortest delay between pings.
-			Serial.print("Ping: ");
-			Serial.print(sonar.ping_cm()); // Send ping, get distance in cm and print result (0 = outside set distance range)
-			Serial.println("cm");
-			
-		}
-
-		distancia= sonar.ping_cm();
-
-		if((distancia>3)&&(distancia<120)){
-			Serial.println("Medida correcta,envia");
-			nivelPellets =  (120-distancia) * 0.83; //map(distancia,3,120,100,0);
-			
-			/*msg.addAnalogInput(11, nivelPellets);
-			msg.addDistance(35,distancia);*/
-			
-			
-			//sendMsgPack(json);
-			//--
-		/*json["idx"] = 35;
-		json["nvalue"] = 0;
-		json["svalue"] = String (distancia);
-		sendMsgPack(json);*/
-		//--
-		Serial.printf ("Distancia: %i\n", distancia);
-		Serial.printf ("Nivel pellets: %f\n", nivelPellets);
-		}
-		json["Pellets"] = nivelPellets;
-		json["termostato"] = termosta ? 1 : 0;  //influxdb no reconoce on/off
-		json["enPellet"] = config.pelletCtl ? 1 : 0;
-
-		
 		sendJson(json);
 		// End of user code
 }
 
-void CONTROLLER_CLASS_NAME::arranque(){
-	int tParoVar;
-	static int lastParoVar = config.tParo;
-
-	const size_t capacity = JSON_OBJECT_SIZE (2);
-	DynamicJsonDocument json (capacity);
-	
-	
-
-	if ((tempMezcla - tempRetBaja > 4) || (tempMezcla - tempRetAlta > 4)) {
-		tParoVar = config.tParo + 4; // Si el suelo esta frio aumento la histeresis
-		if(lastParoVar!=tParoVar){
-			json["tParoVar"]= tParoVar;
-			sendJson(json);
-			lastParoVar = tParoVar;
-		}
-	}
-	else {
-		tParoVar = config.tParo;
-		if(lastParoVar!=tParoVar){
-			json["tParoVar"]= tParoVar;
-			sendJson(json);
-			lastParoVar = tParoVar;
-		}
-	}
-	
-	
-	if (((0 < tempAcumula)&&(tempAcumula < config.tArranq)) && ((nivelPellets > 30) || !config.pelletCtl)){  // config.pelletCtl deshabilita el control nivelPellets
-		termosta = HIGH;
-		if (perTempo || tempAcumula<config.tMin)  perRelay = true;
-		if (config.bypass && perRelay && !lastState){
-			setRelay(HIGH);
-			Serial.println("Orden arranque caldera");
-
-		}
-	}	
-	else if( tempAcumula > tParoVar) {
-		termosta = LOW;
-		if (lastState == HIGH){
-			setRelay(LOW);
-			lastStart = millis();
-			perTempo = LOW;
-			unaVez = true;
-			perRelay = false;
-			
-			Serial.println("Desactivado 2 horas");
-		}
-	}
-
-	if(termosta == HIGH && unaVez){
-		unaVez = false;
-		
-		Serial.println("Demanda de caldera");
-	}
-	
-	
-	if (millis () - lastStart > START_PERIOD && !perTempo) {
-		perTempo = HIGH;
-		Serial.println("Arranque permitido por tiempo");
-	}
-
-	if ((tempAcumula < 38) || (tempRetAlta < 26) || (tempRetBaja <26)){
-		perTempo = HIGH;
-		setBypass(1);
-		Serial.println("Arranque activado por baja temp. acumulador");
-	}
-
-}
 
 
 void CONTROLLER_CLASS_NAME::loop () {
@@ -557,7 +311,7 @@ void CONTROLLER_CLASS_NAME::loop () {
         sendRelayStatus ();
 		//showTime ();
 		userCode();
-		arranque();
+		
     }
 }
 
@@ -576,14 +330,9 @@ void CONTROLLER_CLASS_NAME::configManagerExit (bool status) {
 	// You can read configuration paramenter values here
 	if (status) {
 
-		config.bypass = true;
 		config.ON_STATE = ON;
 		config.bootStatus = SAVE_RELAY_STATUS;
-		config.bypassStatus = SAVE_RELAY_STATUS;
-		config.tArranq = 48;
-		config.tParo = 57;
-		config.tMin = 39;		
-		
+				
 		if (!saveConfig ()) {
 			DEBUG_ERROR ("Error writting blind controller config to filesystem.");
 		} else {
@@ -597,15 +346,9 @@ void CONTROLLER_CLASS_NAME::configManagerExit (bool status) {
 void CONTROLLER_CLASS_NAME::defaultConfig () {
 	
 	//config.relayPin = RELAY_PIN;
-	config.bypass = true;
-	config.pelletCtl = true;
 	config.ON_STATE = ON;
 	config.bootStatus = SAVE_RELAY_STATUS;
-	config.bypassStatus = SAVE_RELAY_STATUS;
-	config.tArranq = 48;
-	config.tParo = 57;
-	config.tMin = 39;
-
+	
 }
 
 bool CONTROLLER_CLASS_NAME::loadConfig () {
@@ -633,46 +376,27 @@ bool CONTROLLER_CLASS_NAME::loadConfig () {
 				DEBUG_WARN ("JSON file parsed");
 			}
 
-			if (doc.containsKey ("bypass") &&
-				doc.containsKey ("ON_STATE") &&
-				doc.containsKey ("bypassStatus") &&
+			if (doc.containsKey ("ON_STATE") &&
 				doc.containsKey ("bootStatus")) {
 
 				json_correct = true;
 				//config.bypass = doc["linked"].as<bool> ();
 				config.ON_STATE = doc["ON_STATE"].as<int> ();
 				int bootStatus = doc["bootStatus"].as<int> ();
-				int bypassStatus = doc["bypassStatus"].as<int> ();
+				
 				if (bootStatus >= RELAY_OFF && bootStatus <= SAVE_RELAY_STATUS) {
 					config.bootStatus = (bootRelayStatus_t)bootStatus;
 					DEBUG_WARN ("Boot status set to %d", config.bootStatus);
 				} else {
 					config.bootStatus = RELAY_OFF;
 				}
-				if (bypassStatus >= RELAY_OFF && bypassStatus <= SAVE_RELAY_STATUS) {
-					config.bypassStatus = (bootRelayStatus_t)bypassStatus;
-					DEBUG_WARN ("Bypass status set to %d", config.bypassStatus);
-				} else {
-					config.bypassStatus = RELAY_OFF;
-				}
-				config.tArranq = doc["tArranq"].as<int> ();
-				config.tParo = doc["tParo"].as<int> ();
+				
 			}
 			
-			if (doc.containsKey ("tMin")) {
-				config.tMin = doc["tMin"].as<int> ();
-			}
-
 			if (doc.containsKey ("relayStatus")) {
 				config.relayStatus = doc["relayStatus"].as<bool> ();
 			}
-			if (doc.containsKey ("bypass")) {
-				config.bypass = doc["bypass"].as<bool> ();
-			}
-			if (doc.containsKey ("pelletCtl")) {
-				config.pelletCtl = doc["pelletCtl"].as<bool> ();
-			}
-
+			
 			configFile.close ();
 			if (json_correct) {
 				DEBUG_WARN ("Smart switch controller configuration successfuly read");
@@ -680,7 +404,6 @@ bool CONTROLLER_CLASS_NAME::loadConfig () {
 				DEBUG_WARN ("Smart switch controller configuration error");
 			}
 			DEBUG_WARN ("==== Smart switch Controller Configuration ====");
-			DEBUG_WARN ("Bypass: %s", config.bypass ? "true" : "false");
 			DEBUG_WARN ("ON level: %s ", config.ON_STATE ? "HIGH" : "LOW");
 			DEBUG_WARN ("Boot relay status: %d ", config.bootStatus);
 
@@ -726,18 +449,11 @@ bool CONTROLLER_CLASS_NAME::saveConfig() {
 	/*config.bootStatus = SAVE_RELAY_STATUS;
 	config.bypassStatus = SAVE_RELAY_STATUS;*/
 
-	doc["bypass"] = config.bypass;
-	doc["pelletCtl"] = config.pelletCtl;
 	doc["ON_STATE"] = config.ON_STATE;
 	doc["relayStatus"] = config.relayStatus;
 	int bootStatus = config.bootStatus;
 	doc["bootStatus"] = bootStatus;
-	int bypassStatus = config.bypassStatus;
-	doc["bypassStatus"] = bypassStatus;
-	doc["tArranq"] = config.tArranq;
-	doc["tParo"] = config.tParo;
-	doc["tMin"] = config.tMin;
-
+	
 	if (serializeJson (doc, configFile) == 0) {
 		DEBUG_ERROR ("Failed to write to file");
 		configFile.close ();
@@ -766,95 +482,9 @@ bool CONTROLLER_CLASS_NAME::saveConfig() {
 #if SUPPORT_HA_DISCOVERY   
 // Repeat this method for every entity
 
-void CONTROLLER_CLASS_NAME::buildHABypassDiscovery () {
-    // Select corresponding HAEntiny type
-    HASwitch* haEntity = new HASwitch ();
 
-    uint8_t* msgPackBuffer;
 
-    if (!haEntity) {
-        DEBUG_WARN ("JSON object instance does not exist");
-        return;
-    }
-
-    // *******************************
-    // Add your characteristics here
-    // There is no need to futher modify this function
-
-    haEntity->setNameSufix ("bypass");
-    haEntity->setStateOn (1);
-    haEntity->setStateOff (0);
-    haEntity->setValueField ("bypass");
-    haEntity->setPayloadOff ("{\"cmd\":\"bypass\",\"bypass\":0}");
-    haEntity->setPayloadOn ("{\"cmd\":\"bypass\",\"bypass\":1}");
-    // *******************************
-
-    size_t bufferLen = haEntity->measureMessage ();
-
-    msgPackBuffer = (uint8_t*)malloc (bufferLen);
-
-    size_t len = haEntity->getAnounceMessage (bufferLen, msgPackBuffer);
-
-    DEBUG_INFO ("Resulting MSG pack length: %d", len);
-
-    if (!sendHADiscovery (msgPackBuffer, len)) {
-        DEBUG_WARN ("Error sending HA discovery message");
-    }
-
-    if (haEntity) {
-        delete (haEntity);
-    }
-
-    if (msgPackBuffer) {
-        free (msgPackBuffer);
-    }
-}
-
-void CONTROLLER_CLASS_NAME::buildHAPelletCtlDiscovery () {
-    // Select corresponding HAEntiny type
-    HASwitch* haEntity = new HASwitch ();
-
-    uint8_t* msgPackBuffer;
-
-    if (!haEntity) {
-        DEBUG_WARN ("JSON object instance does not exist");
-        return;
-    }
-
-    // *******************************
-    // Add your characteristics here
-    // There is no need to futher modify this function
-
-    haEntity->setNameSufix ("enPellet");
-    haEntity->setStateOn (1);
-    haEntity->setStateOff (0);
-    haEntity->setValueField ("enPellet");
-    haEntity->setPayloadOff ("{\"cmd\":\"enPellet\",\"enPellet\":0}");
-    haEntity->setPayloadOn ("{\"cmd\":\"enPellet\",\"enPellet\":1}");
-    // *******************************
-
-    size_t bufferLen = haEntity->measureMessage ();
-
-    msgPackBuffer = (uint8_t*)malloc (bufferLen);
-
-    size_t len = haEntity->getAnounceMessage (bufferLen, msgPackBuffer);
-
-    DEBUG_INFO ("Resulting MSG pack length: %d", len);
-
-    if (!sendHADiscovery (msgPackBuffer, len)) {
-        DEBUG_WARN ("Error sending HA discovery message");
-    }
-
-    if (haEntity) {
-        delete (haEntity);
-    }
-
-    if (msgPackBuffer) {
-        free (msgPackBuffer);
-    }
-}
-
-void CONTROLLER_CLASS_NAME::buildHAPBajaDiscovery () {
+void CONTROLLER_CLASS_NAME::buildHAIdaBajaDiscovery () {
     // Select corresponding HAEntiny type
     HASensor* haEntity = new HASensor ();
 	
@@ -869,11 +499,11 @@ void CONTROLLER_CLASS_NAME::buildHAPBajaDiscovery () {
     // Add your characteristics here
     // There is no need to futher modify this function
 
-    haEntity->setNameSufix ("Mezcla");
+    haEntity->setNameSufix ("ida_Baja");
     haEntity->setDeviceClass (sensor_temperature);
     haEntity->setExpireTime (3600);
     haEntity->setUnitOfMeasurement ("ºC");
-    haEntity->setValueField ("Mezcla");  // nombre del json del valor a capurar 
+    haEntity->setValueField ("IdaBaja");  // nombre del json del valor a capurar 
     //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
 
     // *******************************
@@ -899,7 +529,7 @@ void CONTROLLER_CLASS_NAME::buildHAPBajaDiscovery () {
     }
 		
 }
-void CONTROLLER_CLASS_NAME::buildHAPAltaDiscovery () {
+void CONTROLLER_CLASS_NAME::buildHAIdaAltaDiscovery () {
     // Select corresponding HAEntiny type
     HASensor* haEntity = new HASensor ();
 	
@@ -914,11 +544,11 @@ void CONTROLLER_CLASS_NAME::buildHAPAltaDiscovery () {
     // Add your characteristics here
     // There is no need to futher modify this function
 
-    haEntity->setNameSufix ("Ret_Alta");
+    haEntity->setNameSufix ("ida_Alta");
     haEntity->setDeviceClass (sensor_temperature);
     haEntity->setExpireTime (3600);
     haEntity->setUnitOfMeasurement ("ºC");
-    haEntity->setValueField ("RetAlta");  // nombre del json del valor a capurar 
+    haEntity->setValueField ("IdaAlta");  // nombre del json del valor a capurar 
     //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
 
     // *******************************
@@ -944,7 +574,7 @@ void CONTROLLER_CLASS_NAME::buildHAPAltaDiscovery () {
     }
 		
 }
-void CONTROLLER_CLASS_NAME::buildHARetornoDiscovery () {
+void CONTROLLER_CLASS_NAME::buildHARetBajaDiscovery () {
     // Select corresponding HAEntiny type
     HASensor* haEntity = new HASensor ();
 	
@@ -959,7 +589,7 @@ void CONTROLLER_CLASS_NAME::buildHARetornoDiscovery () {
     // Add your characteristics here
     // There is no need to futher modify this function
 
-    haEntity->setNameSufix ("Ret_Baja");
+    haEntity->setNameSufix ("ret_Baja");
     haEntity->setDeviceClass (sensor_temperature);
     haEntity->setExpireTime (3600);
     haEntity->setUnitOfMeasurement ("ºC");
@@ -989,7 +619,7 @@ void CONTROLLER_CLASS_NAME::buildHARetornoDiscovery () {
     }
 		
 }
-void CONTROLLER_CLASS_NAME::buildHAAcumulaDiscovery () {
+void CONTROLLER_CLASS_NAME::buildHARetAltaDiscovery () {
     // Select corresponding HAEntiny type
     HASensor* haEntity = new HASensor ();
 	
@@ -1004,11 +634,11 @@ void CONTROLLER_CLASS_NAME::buildHAAcumulaDiscovery () {
     // Add your characteristics here
     // There is no need to futher modify this function
 
-    haEntity->setNameSufix ("Acumulador");
+    haEntity->setNameSufix ("ret_Alta");
     haEntity->setDeviceClass (sensor_temperature);
     haEntity->setExpireTime (3600);
     haEntity->setUnitOfMeasurement ("ºC");
-    haEntity->setValueField ("Acumula");  // nombre del json del valor a capurar 
+    haEntity->setValueField ("RetAlta");  // nombre del json del valor a capurar 
     //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
 
     // *******************************
@@ -1081,49 +711,5 @@ void CONTROLLER_CLASS_NAME::buildHACalderaDiscovery () {
     }
 		
 }
-void CONTROLLER_CLASS_NAME::buildHAPelletDiscovery () {
-    // Select corresponding HAEntiny type
-    HASensor* haEntity = new HASensor ();
-	
-    uint8_t* msgPackBuffer;
 
-    if (!haEntity) {
-        DEBUG_WARN ("JSON object instance does not exist");
-        return;
-    }
-
-    // *******************************
-    // Add your characteristics here
-    // There is no need to futher modify this function
-
-    haEntity->setNameSufix ("Pellt");
-    haEntity->setDeviceClass (sensor_humidity);
-    haEntity->setExpireTime (3600);
-    haEntity->setUnitOfMeasurement ("%");
-    haEntity->setValueField ("Pellets");  // nombre del json del valor a capurar 
-    //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
-
-    // *******************************
-
-    size_t bufferLen = haEntity->measureMessage ();
-
-    msgPackBuffer = (uint8_t*)malloc (bufferLen);
-
-    size_t len = haEntity->getAnounceMessage (bufferLen, msgPackBuffer);
-
-    DEBUG_INFO ("Resulting MSG pack length: %d", len);
-
-    if (!sendHADiscovery (msgPackBuffer, len)) {
-        DEBUG_WARN ("Error sending HA discovery message");
-    }
-
-    if (haEntity) {
-        delete (haEntity);
-    }
-
-    if (msgPackBuffer) {
-        free (msgPackBuffer);
-    }
-		
-}
 #endif // SUPPORT_HA_DISCOVERY

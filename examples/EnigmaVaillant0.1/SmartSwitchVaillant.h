@@ -24,27 +24,23 @@ static const char* CONTROLLER_NAME = "Caldera controller";
 //-------------------------------//
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <NewPing.h>
 
 // --------------------------------------------------
 // You may define data structures and constants here
 // --------------------------------------------------
 
 #define RELAY_PIN D1
-#define ECHO_PIN     D2  // Arduino pin tied to echo pin on the ultrasonic sensor.
-#define TRIGGER_PIN  D3  // Arduino pin tied to trigger pin on the ultrasonic sensor.
 
 #define RESET_PIN D5 // You can set a different configuration reset pin here. Check for conflicts with used pins.
 //#define PBAJA_PIN D5
 #define ONE_WIRE_BUS D6
 //#define PALTA_PIN D7
 
-#define MAX_DISTANCE 200 // Maximum distance we want to ping for (in centimeters). Maximum sensor distance is rated at 400-500cm.
 
 #define ON HIGH
 #define OFF !ON
 
-static const uint8_t CALDERA_MY_VERS[4] = { 2,5,2,1 }; ///< @brief Caldera Version
+static const uint8_t CALDERA_MY_VERS[4] = { 0,1,0,0 }; ///< @brief Caldera Version
 
 typedef enum {
 	RELAY_OFF = 0,
@@ -56,14 +52,8 @@ typedef enum {
 struct smartSwitchControllerHw_t {
 	//int relayPin;
 	bool relayStatus;
-	bool bypass;
-    bool pelletCtl;
 	bootRelayStatus_t bootStatus;
-    bootRelayStatus_t bypassStatus;
-	int tParo;
-    int tArranq;
-    int tMin;
-	int ON_STATE;
+    int ON_STATE;
 	//int BY_STATE;
 };
 
@@ -153,11 +143,7 @@ protected:
         snprintf (version_buf, 14, "%d.%d.%d-%d.%d.%d",
                   CALDERA_MY_VERS[0], CALDERA_MY_VERS[1], CALDERA_MY_VERS[2], ENIGMAIOT_PROT_VERS[0], ENIGMAIOT_PROT_VERS[1], ENIGMAIOT_PROT_VERS[2]);
         json["version"] = String (version_buf);
-        json["tArranque"] = config.tArranq;
-        json["tParo"] = config.tParo;
-        json["tMinima"] = config.tMin;
-        json["enPellet"] = config.pelletCtl;
-
+        
         return sendJson (json);
     }
 
@@ -166,14 +152,11 @@ protected:
      * as number of entities you need to create
      */
 
-    void buildHAPBajaDiscovery ();
-	void buildHAPAltaDiscovery ();
-	void buildHARetornoDiscovery ();
-	void buildHAAcumulaDiscovery ();
-    void buildHABypassDiscovery ();
-     void buildHAPelletCtlDiscovery ();
-	void buildHAPelletDiscovery ();
-	void buildHACalderaDiscovery ();
+    void buildHAIdaBajaDiscovery ();
+	void buildHAIdaAltaDiscovery ();
+	void buildHARetBajaDiscovery ();
+	void buildHARetAltaDiscovery ();
+    void buildHACalderaDiscovery ();
 
 	// ------------------------------------------------------------
 	// You may add additional method definitions that you need here
