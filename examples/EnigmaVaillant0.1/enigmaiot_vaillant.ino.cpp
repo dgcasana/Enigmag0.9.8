@@ -197,7 +197,7 @@ void wifiManagerStarted () {
 void setup () {
 	
 	
-  	Serial.begin (115200); Serial.println (); Serial.printf ("enigmaiot_Caldera-vd.%d.%d.%d-Enigma-v%d.%d.%d",
+  	Serial.begin (115200); Serial.println (); Serial.printf ("enigmaiot_Vaillant-vd.%d.%d.%d-Enigma-v%d.%d.%d",
                   CALDERA_MY_VERS[0], CALDERA_MY_VERS[1], CALDERA_MY_VERS[2], ENIGMAIOT_PROT_VERS[0], ENIGMAIOT_PROT_VERS[1], ENIGMAIOT_PROT_VERS[2]);
 	
 	Serial.println ("----Reset Pin D5----");

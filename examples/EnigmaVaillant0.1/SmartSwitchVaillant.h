@@ -156,7 +156,7 @@ protected:
 	void buildHAIdaAltaDiscovery ();
 	void buildHARetBajaDiscovery ();
 	void buildHARetAltaDiscovery ();
-    void buildHACalderaDiscovery ();
+    void buildHAEvUDiscovery ();
 
 	// ------------------------------------------------------------
 	// You may add additional method definitions that you need here

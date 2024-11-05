@@ -171,7 +171,7 @@ void CONTROLLER_CLASS_NAME::connectInform () {
 	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAIdaAltaDiscovery, this));
 	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHARetBajaDiscovery, this));
 	addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHARetAltaDiscovery, this));
-    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHACalderaDiscovery, this));
+    addHACall (std::bind (&CONTROLLER_CLASS_NAME::buildHAEvUDiscovery, this));
 #endif
 
     EnigmaIOTjsonController::connectInform ();
@@ -303,10 +303,10 @@ void CONTROLLER_CLASS_NAME::loop () {
 
 		//sendJson (json);
 	static clock_t lastSentStatus;
-    static clock_t sendStatusPeriod = 30000;
+    static clock_t sendStatusPeriod = 6000;
     if (enigmaIotNode->isRegistered () && millis () - lastSentStatus > sendStatusPeriod) {
         lastSentStatus = millis ();
-        sendStatusPeriod = 300000;
+        sendStatusPeriod = 60000;
         sendRelayStatus ();
 		//showTime ();
 		userCode();
@@ -664,13 +664,13 @@ void CONTROLLER_CLASS_NAME::buildHARetAltaDiscovery () {
 		
 }
 
-void CONTROLLER_CLASS_NAME::buildHACalderaDiscovery () {
-    // Select corresponding HAEntiny type
-    HABinarySensor* haBEntity = new HABinarySensor ();
-	
+void CONTROLLER_CLASS_NAME::buildHAEvUDiscovery () {
+// Select corresponding HAEntiny type
+    HASwitch* haEntity = new HASwitch ();
+
     uint8_t* msgPackBuffer;
 
-    if (!haBEntity) {
+    if (!haEntity) {
         DEBUG_WARN ("JSON object instance does not exist");
         return;
     }
@@ -679,21 +679,19 @@ void CONTROLLER_CLASS_NAME::buildHACalderaDiscovery () {
     // Add your characteristics here
     // There is no need to futher modify this function
 
-    haBEntity->setNameSufix ("Caldera");
-	haBEntity->setDeviceClass (bs_heat);
-    haBEntity->addExpiration (3600);
-	haBEntity->setPayloadOff ("0");
-    haBEntity->setPayloadOn ("1");
-    haBEntity->setValueField ("rly");  // nombre del json del valor a capurar 
-    //haEntity->setValueTemplate ("{%if value_json.dp==2-%}{{value_json.temp}}{%-else-%}{{states('sensor.***_temp')}}{%-endif%}");
-
+    haEntity->setNameSufix ("EVU");
+    haEntity->setStateOn (1);
+    haEntity->setStateOff (0);
+    haEntity->setValueField ("rly");
+    haEntity->setPayloadOff ("{\"cmd\":\"rly\",\"rly\":0}");
+    haEntity->setPayloadOn ("{\"cmd\":\"rly\",\"rly\":1}");
     // *******************************
 
-    size_t bufferLen = haBEntity->measureMessage ();
+    size_t bufferLen = haEntity->measureMessage ();
 
     msgPackBuffer = (uint8_t*)malloc (bufferLen);
 
-    size_t len = haBEntity->getAnounceMessage (bufferLen, msgPackBuffer);
+    size_t len = haEntity->getAnounceMessage (bufferLen, msgPackBuffer);
 
     DEBUG_INFO ("Resulting MSG pack length: %d", len);
 
@@ -701,14 +699,13 @@ void CONTROLLER_CLASS_NAME::buildHACalderaDiscovery () {
         DEBUG_WARN ("Error sending HA discovery message");
     }
 
-    if (haBEntity) {
-        delete (haBEntity);
+    if (haEntity) {
+        delete (haEntity);
     }
 
     if (msgPackBuffer) {
         free (msgPackBuffer);
     }
-		
 }
 
 #endif // SUPPORT_HA_DISCOVERY
