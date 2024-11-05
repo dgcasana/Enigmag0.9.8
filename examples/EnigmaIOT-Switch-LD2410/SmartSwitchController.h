@@ -27,7 +27,7 @@ static const char* CONTROLLER_NAME = "Luz-cochera";
 // --------------------------------------------------
 // You may define data structures and constants here
 // --------------------------------------------------
-#define DEFAULT_BUTTON_PIN 0
+//#define DEFAULT_BUTTON_PIN 0
 #define DEFAULT_RELAY_PIN 12
 #define ON HIGH
 #define OFF !ON

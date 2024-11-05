@@ -4,16 +4,20 @@
 
 #include <functional>
 #include "SmartSwitchController.h"
-#include "MyLD2410.h"
+#include <ld2410.h>
 
 using namespace std;
 using namespace placeholders;
 
-#define ENHANCED_MODE
-#define SERIAL_BAUD_RATE 115200
-#define sensorSerial Serial
-MyLD2410 sensor(sensorSerial, true);
-unsigned long nextPrint = 0, printEvery = 1000;  // print every second
+	#define MONITOR_SERIAL Serial
+    #define RADAR_SERIAL Serial1
+    #define RADAR_RX_PIN 4
+    #define RADAR_TX_PIN 5
+	ld2410 radar;
+	bool engineeringMode = false;
+	String command;
+	uint32_t lastReading = 0;
+	bool radarConnected = false;
 
 constexpr auto CONFIG_FILE = "/customconf.json"; ///< @brief Custom configuration file name
 
@@ -195,6 +199,32 @@ void CONTROLLER_CLASS_NAME::connectInform () {
 void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 	enigmaIotNode = node;
 
+	MONITOR_SERIAL.begin(115200); //Feedback over Serial Monitor
+  	delay(500); //Give a while for Serial Monitor to wake up
+  	//radar.debug(Serial); //Uncomment to show debug information from the library on the Serial Monitor. By default this does not show sensor reads as they are very frequent.
+    RADAR_SERIAL.begin(115200, SERIAL_8N1, RADAR_RX_PIN, RADAR_TX_PIN); //UART for monitoring the radar
+	delay(500);
+	MONITOR_SERIAL.print(F("\nConnect LD2410 radar TX to GPIO:"));
+	MONITOR_SERIAL.println(RADAR_RX_PIN);
+	MONITOR_SERIAL.print(F("Connect LD2410 radar RX to GPIO:"));
+	MONITOR_SERIAL.println(RADAR_TX_PIN);
+	MONITOR_SERIAL.print(F("LD2410 radar sensor initialising: "));
+	if(radar.begin(RADAR_SERIAL))
+	{
+		MONITOR_SERIAL.println(F("OK"));
+		MONITOR_SERIAL.print(F("LD2410 firmware version: "));
+		MONITOR_SERIAL.print(radar.firmware_major_version);
+		MONITOR_SERIAL.print('.');
+		MONITOR_SERIAL.print(radar.firmware_minor_version);
+		MONITOR_SERIAL.print('.');
+		MONITOR_SERIAL.println(radar.firmware_bugfix_version, HEX);
+	}
+	else
+	{
+		MONITOR_SERIAL.println(F("not connected"));
+	}
+	MONITOR_SERIAL.println(F("Supported commands\nread: read current values from the sensor\nreadconfig: read the configuration from the sensor\nsetmaxvalues <motion gate> <stationary gate> <inactivitytimer>\nsetsensitivity <gate> <motionsensitivity> <stationarysensitivity>\nenableengineeringmode: enable engineering mode\ndisableengineeringmode: disable engineering mode\nrestart: restart the sensor\nreadversion: read firmware version\nfactoryreset: factory reset the sensor\n"));
+
 	// You do node setup here. Use it as it was the normal setup() Arduino function
 	//pinMode (config.buttonPin, INPUT_PULLUP);
 	pinMode (config.relayPin, OUTPUT);
@@ -270,61 +300,34 @@ void CONTROLLER_CLASS_NAME::setBoot (int state) {
 	}
 }
 
-void printValue(const uint8_t &val) {
-  Serial1.print(' ');
-  Serial1.print(val);
-}
-
-void printData() {
-  Serial1.print(sensor.statusString());
-  if (sensor.presenceDetected()) {
-    Serial1.print(", distance: ");
-    Serial1.print(sensor.detectedDistance());
-    Serial1.print("cm");
-  }
-  Serial1.println();
-  if (sensor.movingTargetDetected()) {
-    Serial1.print(" MOVING    = ");
-    Serial1.print(sensor.movingTargetSignal());
-    Serial1.print("@");
-    Serial1.print(sensor.movingTargetDistance());
-    Serial1.print("cm ");
-    if (sensor.inEnhancedMode()) {
-      Serial1.print("\n signals->[");
-      sensor.getMovingSignals().forEach(printValue);
-      Serial1.print(" ] thresholds:[");
-      sensor.getMovingThresholds().forEach(printValue);
-      Serial1.print(" ]");
-    }
-    Serial1.println();
-  }
-  if (sensor.stationaryTargetDetected()) {
-    Serial1.print(" STATIONARY= ");
-    Serial1.print(sensor.stationaryTargetSignal());
-    Serial1.print("@");
-    Serial1.print(sensor.stationaryTargetDistance());
-    Serial1.print("cm ");
-    if (sensor.inEnhancedMode()) {
-      Serial1.print("\n signals->[");
-      sensor.getStationarySignals().forEach(printValue);
-      Serial1.print(" ] thresholds:[");
-      sensor.getStationaryThresholds().forEach(printValue);
-      Serial1.print(" ]");
-    }
-    Serial1.println();
-  }
-  uint8_t lightLevel = sensor.getLightLevel();
-  if (lightLevel) {
-    Serial1.print("Light level: ");
-    Serial1.println(lightLevel);
-  }
-  Serial1.println();
-}
-
 void CONTROLLER_CLASS_NAME::loop () {
-  if ((sensor.check() == MyLD2410::Response::DATA) && (millis() > nextPrint)) {
-    nextPrint = millis() + printEvery;
-    printData();
+  radar.read();
+  if(radar.isConnected() && millis() - lastReading > 1000)  //Report every 1000ms
+  {
+    lastReading = millis();
+    if(radar.presenceDetected())
+    {
+      if(radar.stationaryTargetDetected())
+      {
+        Serial.print(F("Stationary target: "));
+        Serial.print(radar.stationaryTargetDistance());
+        Serial.print(F("cm energy:"));
+        Serial.print(radar.stationaryTargetEnergy());
+        Serial.print(' ');
+      }
+      if(radar.movingTargetDetected())
+      {
+        Serial.print(F("Moving target: "));
+        Serial.print(radar.movingTargetDistance());
+        Serial.print(F("cm energy:"));
+        Serial.print(radar.movingTargetEnergy());
+      }
+      Serial.println();
+    }
+    else
+    {
+      Serial.println(F("No target"));
+    }
   }
     static clock_t lastSentStatus;
     static clock_t sendStatusPeriod = 2000;
