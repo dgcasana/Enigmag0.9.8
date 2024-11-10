@@ -4,7 +4,7 @@
 
 #include <functional>
 #include "SmartSwitchController.h"
-#include <ld2410.h>
+
 
 using namespace std;
 using namespace placeholders;
@@ -12,10 +12,9 @@ using namespace placeholders;
 	#define MONITOR_SERIAL Serial
     #define RADAR_SERIAL Serial1
     #define RADAR_RX_PIN 4
-    #define RADAR_TX_PIN 5
+    #define RADAR_TX_PIN 3
+	#include <ld2410.h>
 	ld2410 radar;
-	bool engineeringMode = false;
-	String command;
 	uint32_t lastReading = 0;
 	bool radarConnected = false;
 
@@ -199,10 +198,7 @@ void CONTROLLER_CLASS_NAME::connectInform () {
 void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 	enigmaIotNode = node;
 
-	MONITOR_SERIAL.begin(115200); //Feedback over Serial Monitor
-  	delay(500); //Give a while for Serial Monitor to wake up
-  	//radar.debug(Serial); //Uncomment to show debug information from the library on the Serial Monitor. By default this does not show sensor reads as they are very frequent.
-    RADAR_SERIAL.begin(115200, SERIAL_8N1, RADAR_RX_PIN, RADAR_TX_PIN); //UART for monitoring the radar
+	RADAR_SERIAL.begin(115200, SERIAL_8N1, RADAR_RX_PIN, RADAR_TX_PIN); //UART for monitoring the radar
 	delay(500);
 	MONITOR_SERIAL.print(F("\nConnect LD2410 radar TX to GPIO:"));
 	MONITOR_SERIAL.println(RADAR_RX_PIN);
@@ -245,7 +241,7 @@ void CONTROLLER_CLASS_NAME::setup (EnigmaIOTNodeClass* node, void* data) {
 	DEBUG_WARN ("Finish begin");
 
 	// If your node should sleep after sending data do all remaining tasks here
-	sensor.enhancedMode();
+	
 }
 
 void CONTROLLER_CLASS_NAME::toggleRelay () {
